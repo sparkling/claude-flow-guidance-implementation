@@ -164,7 +164,7 @@ Expected success signals:
 
 ## Links
 
-- Homepage: https://sparklingideas.co.uk/guidance
+- Homepage: https://sparklingideas.co.uk/guidance/claude-flow
 - Package: https://www.npmjs.com/package/claude-flow-guidance-implementation
 - GitHub: https://github.com/sparkling/claude-flow-guidance-implementation
 - Issues: https://github.com/sparkling/claude-flow-guidance-implementation/issues

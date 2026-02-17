@@ -24,6 +24,19 @@ npm i -D claude-flow-guidance-implementation
 npx cf-guidance-impl init --target ~/source/my-project --install-deps
 ```
 
+Choose integration target mode explicitly when needed:
+
+```bash
+# default: both Claude + Codex wiring
+npx cf-guidance-impl init --target ~/source/my-project --target-mode both
+
+# Claude-only wiring (.claude hooks + settings merge)
+npx cf-guidance-impl init --target ~/source/my-project --target-mode claude
+
+# Codex-only wiring (.agents bridge + codex scripts)
+npx cf-guidance-impl init --target ~/source/my-project --target-mode codex
+```
+
 ## Quickstart
 
 ```bash
@@ -37,21 +50,26 @@ npx --yes -p claude-flow-guidance-implementation cf-guidance-impl verify --targe
 ## CLI commands
 
 ```bash
-cf-guidance-impl init --target <repoPath> [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
-cf-guidance-impl install --target <repoPath> [--force] [--install-deps]
-cf-guidance-impl verify --target <repoPath>
+cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
+cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [--force] [--install-deps]
+cf-guidance-impl verify --target <repoPath> [--target-mode both|claude|codex]
 ```
 
 ## What `init` does
 
 `cf-guidance-impl init` performs:
-1. `npx @claude-flow/cli@latest init --dual` in target repo (unless `--skip-cf-init`)
-2. installs scaffold runtime files (`scripts/`, `src/guidance/`, `.claude/helpers/hook-handler.cjs`, docs)
-3. merges target `package.json` scripts + guidance deps
-4. merges `.claude/settings.json` env and hook blocks
-5. appends Codex bridge sections to `.agents/config.toml` and `AGENTS.md`
-6. creates `CLAUDE.local.md` stub and updates `.gitignore`
-7. verifies wiring (unless `--no-verify`)
+1. runs `npx @claude-flow/cli@latest init` in target repo (unless `--skip-cf-init`)
+2. adds init flags by mode:
+   - `--target-mode both` + default dual -> `--dual`
+   - `--target-mode codex` -> `--codex`
+   - `--target-mode claude` -> no codex flag
+   - `--no-dual` only affects `both` mode (skips `--dual`)
+3. installs scaffold runtime files (`scripts/`, `src/guidance/`, `.claude/helpers/hook-handler.cjs`, docs)
+4. merges target `package.json` scripts + guidance deps (Codex scripts only for `both|codex`)
+5. merges `.claude/settings.json` env and hook blocks (only for `both|claude`)
+6. appends Codex bridge sections to `.agents/config.toml` and `AGENTS.md` (only for `both|codex`)
+7. creates `CLAUDE.local.md` stub and updates `.gitignore`
+8. verifies wiring for selected mode (unless `--no-verify`)
 
 ## Codex lifecycle integration
 

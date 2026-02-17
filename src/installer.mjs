@@ -64,6 +64,22 @@ function ensureDir(path) {
   mkdirSync(path, { recursive: true });
 }
 
+function normalizeTargetMode(value = 'both') {
+  const mode = String(value || 'both').trim().toLowerCase();
+  if (!['both', 'claude', 'codex'].includes(mode)) {
+    throw new Error(`Invalid target mode: ${value}. Use one of: both, claude, codex.`);
+  }
+  return mode;
+}
+
+function usesClaudeMode(mode) {
+  return mode === 'both' || mode === 'claude';
+}
+
+function usesCodexMode(mode) {
+  return mode === 'both' || mode === 'codex';
+}
+
 function readJson(path, fallback = {}) {
   if (!existsSync(path)) return fallback;
   try {
@@ -138,9 +154,16 @@ function appendBlockIfMissing(path, marker, block, fallback = '') {
   return true;
 }
 
-export function installIntoRepo({ toolkitRoot, targetRepo, force = false, installDeps = false }) {
+export function installIntoRepo({
+  toolkitRoot,
+  targetRepo,
+  force = false,
+  installDeps = false,
+  targetMode = 'both',
+}) {
   const target = resolve(targetRepo);
   const scaffold = resolve(toolkitRoot, 'scaffold');
+  const mode = normalizeTargetMode(targetMode);
 
   if (!existsSync(target)) {
     throw new Error(`Target repo does not exist: ${target}`);
@@ -171,6 +194,8 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
   packageJson.type = packageJson.type || 'module';
   packageJson.scripts = packageJson.scripts || {};
   for (const [name, cmd] of Object.entries(GUIDANCE_PACKAGE_SCRIPTS)) {
+    const isCodexScript = name.startsWith('guidance:codex:');
+    if (isCodexScript && !usesCodexMode(mode)) continue;
     if (!(name in packageJson.scripts)) {
       packageJson.scripts[name] = cmd;
     }
@@ -185,35 +210,45 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
 
   writeJson(packagePath, packageJson);
 
-  // Merge .claude/settings.json hooks and env.
-  const settingsPath = resolve(target, '.claude/settings.json');
-  const settings = readJson(settingsPath, {});
-  settings.env = settings.env || {};
-  for (const [key, value] of Object.entries(GUIDANCE_ENV_DEFAULTS)) {
-    if (!(key in settings.env)) settings.env[key] = value;
+  let settingsPath = null;
+  if (usesClaudeMode(mode)) {
+    // Merge .claude/settings.json hooks and env.
+    settingsPath = resolve(target, '.claude/settings.json');
+    const settings = readJson(settingsPath, {});
+    settings.env = settings.env || {};
+    for (const [key, value] of Object.entries(GUIDANCE_ENV_DEFAULTS)) {
+      if (!(key in settings.env)) settings.env[key] = value;
+    }
+
+    settings.hooks = settings.hooks || {};
+    for (const [event, blocks] of Object.entries(GUIDANCE_HOOKS_DEFAULTS)) {
+      settings.hooks[event] = mergeHookBlocks(settings.hooks[event], blocks);
+    }
+
+    writeJson(settingsPath, settings);
   }
 
-  settings.hooks = settings.hooks || {};
-  for (const [event, blocks] of Object.entries(GUIDANCE_HOOKS_DEFAULTS)) {
-    settings.hooks[event] = mergeHookBlocks(settings.hooks[event], blocks);
+  let agentsConfigPath = null;
+  let agentsDocPath = null;
+  let codexConfigAdded = false;
+  let codexAgentsDocAdded = false;
+
+  if (usesCodexMode(mode)) {
+    agentsConfigPath = resolve(target, '.agents/config.toml');
+    codexConfigAdded = appendBlockIfMissing(
+      agentsConfigPath,
+      '[guidance_codex]',
+      GUIDANCE_CODEX_CONFIG_BLOCK
+    );
+
+    agentsDocPath = resolve(target, 'AGENTS.md');
+    codexAgentsDocAdded = appendBlockIfMissing(
+      agentsDocPath,
+      '## Guidance Lifecycle Wiring (Codex)',
+      GUIDANCE_CODEX_AGENTS_BLOCK,
+      '# Project\n\n'
+    );
   }
-
-  writeJson(settingsPath, settings);
-
-  const agentsConfigPath = resolve(target, '.agents/config.toml');
-  const codexConfigAdded = appendBlockIfMissing(
-    agentsConfigPath,
-    '[guidance_codex]',
-    GUIDANCE_CODEX_CONFIG_BLOCK
-  );
-
-  const agentsDocPath = resolve(target, 'AGENTS.md');
-  const codexAgentsDocAdded = appendBlockIfMissing(
-    agentsDocPath,
-    '## Guidance Lifecycle Wiring (Codex)',
-    GUIDANCE_CODEX_AGENTS_BLOCK,
-    '# Project\n\n'
-  );
 
   // Ensure local guidance file and gitignore entries.
   writeMissingStub(
@@ -232,6 +267,7 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
 
   const summary = {
     target,
+    targetMode: mode,
     copiedFrom: relative(target, scaffold),
     filesInstalled: [
       '.claude/helpers/hook-handler.cjs',
@@ -270,17 +306,23 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
   return summary;
 }
 
-export function verifyRepo({ targetRepo }) {
+export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   const target = resolve(targetRepo);
+  const mode = normalizeTargetMode(targetMode);
   const requiredFiles = [
     '.claude/helpers/hook-handler.cjs',
     'scripts/guidance-integrations.js',
     'scripts/guidance-runtime.js',
-    'scripts/guidance-codex-bridge.js',
     'src/guidance/phase1-runtime.js',
-    '.claude/settings.json',
     'package.json',
   ];
+
+  if (usesCodexMode(mode)) {
+    requiredFiles.push('scripts/guidance-codex-bridge.js');
+    requiredFiles.push('.agents/config.toml');
+    requiredFiles.push('AGENTS.md');
+  }
+  if (usesClaudeMode(mode)) requiredFiles.push('.claude/settings.json');
 
   const checks = [];
   for (const relPath of requiredFiles) {
@@ -293,8 +335,9 @@ export function verifyRepo({ targetRepo }) {
     '.claude/helpers/hook-handler.cjs',
     'scripts/guidance-integrations.js',
     'scripts/guidance-runtime.js',
-    'scripts/guidance-codex-bridge.js',
   ];
+
+  if (usesCodexMode(mode)) checkFiles.push('scripts/guidance-codex-bridge.js');
 
   for (const relPath of checkFiles) {
     const full = resolve(target, relPath);
@@ -311,29 +354,36 @@ export function verifyRepo({ targetRepo }) {
   }
 
   const smokeInput = '{"tool_input":{"command":"git status"}}';
-  const smoke = run(
-    'bash',
-    [
-      '-lc',
-      `printf '%s' '${smokeInput}' | node .claude/helpers/hook-handler.cjs pre-bash`,
-    ],
-    target
-  );
+  let smoke = { status: 0, stdout: '', stderr: '' };
+  if (usesClaudeMode(mode)) {
+    smoke = run(
+      'bash',
+      [
+        '-lc',
+        `printf '%s' '${smokeInput}' | node .claude/helpers/hook-handler.cjs pre-bash`,
+      ],
+      target
+    );
+  }
 
-  const smokeCodex = run(
-    'node',
-    ['scripts/guidance-codex-bridge.js', 'status', '--skip-cf-hooks'],
-    target
-  );
+  let smokeCodex = { status: 0, stdout: '', stderr: '' };
+  if (usesCodexMode(mode)) {
+    smokeCodex = run(
+      'node',
+      ['scripts/guidance-codex-bridge.js', 'status', '--skip-cf-hooks'],
+      target
+    );
+  }
 
   const passed =
     checks.every((check) => check.exists) &&
     syntaxChecks.every((check) => check.ok) &&
-    smoke.status === 0 &&
-    smokeCodex.status === 0;
+    (!usesClaudeMode(mode) || smoke.status === 0) &&
+    (!usesCodexMode(mode) || smokeCodex.status === 0);
 
   return {
     target,
+    targetMode: mode,
     passed,
     files: checks,
     syntaxChecks,
@@ -355,11 +405,13 @@ export function initRepo({
   targetRepo,
   force = false,
   installDeps = false,
+  targetMode = 'both',
   dual = true,
   skipCfInit = false,
   verify = true,
 }) {
   const target = resolve(targetRepo);
+  const mode = normalizeTargetMode(targetMode);
   if (!existsSync(target)) {
     throw new Error(`Target repo does not exist: ${target}`);
   }
@@ -371,7 +423,11 @@ export function initRepo({
 
   if (!skipCfInit) {
     const initArgs = ['@claude-flow/cli@latest', 'init'];
-    if (dual) initArgs.push('--dual');
+    if (mode === 'both') {
+      if (dual) initArgs.push('--dual');
+    } else if (mode === 'codex') {
+      initArgs.push('--codex');
+    }
 
     const initResult = run('npx', initArgs, target);
     claudeFlowInit = {
@@ -394,11 +450,12 @@ export function initRepo({
     targetRepo: target,
     force,
     installDeps,
+    targetMode: mode,
   });
 
   let verifyReport = null;
   if (verify) {
-    verifyReport = verifyRepo({ targetRepo: target });
+    verifyReport = verifyRepo({ targetRepo: target, targetMode: mode });
     if (!verifyReport.passed) {
       throw new Error(
         `Guidance wiring verification failed in ${target}. Run cf-guidance-impl verify --target ${target} for details.`
@@ -408,6 +465,7 @@ export function initRepo({
 
   return {
     target,
+    targetMode: mode,
     claudeFlowInit,
     install,
     verify: verifyReport,

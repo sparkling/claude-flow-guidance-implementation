@@ -9,9 +9,9 @@ const toolkitRoot = resolve(__dirname, '..');
 
 function usage() {
   console.log(`Usage:
-  cf-guidance-impl init --target <repoPath> [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
-  cf-guidance-impl install --target <repoPath> [--force] [--install-deps]
-  cf-guidance-impl verify --target <repoPath>
+  cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
+  cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [--force] [--install-deps]
+  cf-guidance-impl verify --target <repoPath> [--target-mode both|claude|codex]
 `);
 }
 
@@ -34,6 +34,7 @@ async function main() {
   }
 
   const target = getFlagValue(args, '--target', process.cwd());
+  const targetMode = getFlagValue(args, '--target-mode', 'both');
   const force = hasFlag(args, '--force');
   const installDeps = hasFlag(args, '--install-deps');
 
@@ -41,6 +42,7 @@ async function main() {
     const result = initRepo({
       toolkitRoot,
       targetRepo: target,
+      targetMode,
       force,
       installDeps,
       dual: !hasFlag(args, '--no-dual'),
@@ -52,13 +54,19 @@ async function main() {
   }
 
   if (command === 'install') {
-    const result = installIntoRepo({ toolkitRoot, targetRepo: target, force, installDeps });
+    const result = installIntoRepo({
+      toolkitRoot,
+      targetRepo: target,
+      targetMode,
+      force,
+      installDeps,
+    });
     console.log(JSON.stringify(result, null, 2));
     return;
   }
 
   if (command === 'verify') {
-    const report = verifyRepo({ targetRepo: target });
+    const report = verifyRepo({ targetRepo: target, targetMode });
     console.log(JSON.stringify(report, null, 2));
     process.exit(report.passed ? 0 : 2);
   }

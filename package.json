@@ -1,9 +1,25 @@
 {
   "name": "claude-flow-guidance-implementation",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reusable guidance control-plane implementation kit for wiring @claude-flow/guidance into any repo",
   "type": "module",
   "private": false,
+  "author": "Sparkling Ideas <henrik@sparklingideas.co.uk>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sparkling/claude-flow-guidance-implementation.git"
+  },
+  "homepage": "https://github.com/sparkling/claude-flow-guidance-implementation#readme",
+  "bugs": {
+    "url": "https://github.com/sparkling/claude-flow-guidance-implementation/issues"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scaffold",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
     "cf-guidance-impl": "bin/cf-guidance-impl.mjs"
   },
@@ -15,6 +31,9 @@
   "keywords": [
     "claude-flow",
     "guidance",
+    "codex",
+    "claude-md",
+    "agentic",
     "hooks",
     "claude-code",
     "automation"

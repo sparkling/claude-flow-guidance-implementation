@@ -1,115 +1,91 @@
 # claude-flow-guidance-implementation
 
-Reusable implementation kit for wiring `@claude-flow/guidance` into any repo with:
-- guidance runtime scripts
+NPM-first implementation kit for wiring `@claude-flow/guidance` into any repository.
+
+It installs a reusable guidance control plane with:
 - Claude Code hook bridge
+- Codex lifecycle bridge
+- guidance runtime scripts
 - autopilot promotion loop (`CLAUDE.local.md` -> `CLAUDE.md`)
-- verification runbook and docs
+- verification tooling
 
-## What this repo provides
+## Install and run
 
-- A reusable scaffold under `scaffold/`:
-  - `.claude/helpers/hook-handler.cjs`
-  - `scripts/guidance-*.js`
-  - `src/guidance/*.js`
-  - docs
-- An installer CLI:
-  - `cf-guidance-impl install --target <repo>`
-  - `cf-guidance-impl verify --target <repo>`
-- JSON merge logic for:
-  - `package.json` scripts + dependencies
-  - `.claude/settings.json` env + hooks
-  - `.agents/config.toml` Codex bridge section
-  - `AGENTS.md` Codex lifecycle usage section
+Use directly from npm (no clone required):
+
+```bash
+npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target ~/source/my-project --install-deps
+```
+
+Or install as a dev dependency:
+
+```bash
+npm i -D claude-flow-guidance-implementation
+npx cf-guidance-impl init --target ~/source/my-project --install-deps
+```
 
 ## Quickstart
 
 ```bash
-# clone this toolkit
-cd ~/source
-git clone https://github.com/sparkling/claude-flow-guidance-implementation.git
-cd claude-flow-guidance-implementation
+# 1) initialize and wire a target repo
+npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target ~/source/my-project --install-deps
 
-# initialize + wire another repo (runs `claude-flow init --dual`, install, verify)
-node bin/cf-guidance-impl.mjs init --target ~/source/my-project --install-deps
-
-# verify the wiring
-node bin/cf-guidance-impl.mjs verify --target ~/source/my-project
+# 2) verify wiring
+npx --yes -p claude-flow-guidance-implementation cf-guidance-impl verify --target ~/source/my-project
 ```
 
-Init command options:
-- `--no-dual`: run `claude-flow init` without `--dual`
-- `--skip-cf-init`: skip `claude-flow init` and only apply toolkit wiring
-- `--no-verify`: skip post-install verification
-
-## Integration modes for other repos
-
-## 1) Central toolkit mode (recommended)
-Keep this repo as a shared toolkit and run installer into target repos:
+## CLI commands
 
 ```bash
-node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs init --target ~/source/repo-a --install-deps
-node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs init --target ~/source/repo-b --install-deps
+cf-guidance-impl init --target <repoPath> [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
+cf-guidance-impl install --target <repoPath> [--force] [--install-deps]
+cf-guidance-impl verify --target <repoPath>
 ```
 
-## 2) Submodule mode
-Add this repo as a submodule in each project and invoke the installer from there.
+## What `init` does
 
-## 3) Copy mode
-Copy `scaffold/` manually and merge settings/scripts manually.
+`cf-guidance-impl init` performs:
+1. `npx @claude-flow/cli@latest init --dual` in target repo (unless `--skip-cf-init`)
+2. installs scaffold runtime files (`scripts/`, `src/guidance/`, `.claude/helpers/hook-handler.cjs`, docs)
+3. merges target `package.json` scripts + guidance deps
+4. merges `.claude/settings.json` env and hook blocks
+5. appends Codex bridge sections to `.agents/config.toml` and `AGENTS.md`
+6. creates `CLAUDE.local.md` stub and updates `.gitignore`
+7. verifies wiring (unless `--no-verify`)
 
-## What gets wired in the target repo
+## Codex lifecycle integration
 
-- Hook flow: `PreToolUse`/`PostToolUse`/`SessionStart`/`SessionEnd`
-- Guidance events: `pre-command`, `pre-edit`, `pre-task`, `post-edit`, `post-task`, `session-end`
-- Codex lifecycle bridge: `scripts/guidance-codex-bridge.js`
-- Background session-end autopilot launch
-- NPM wrappers:
-  - `guidance:analyze`, `guidance:status`, `guidance:all`
-  - `guidance:optimize`, `guidance:ab-benchmark`
-  - `guidance:scaffold`
-  - `guidance:autopilot:once`, `guidance:autopilot:daemon`
-  - `guidance:codex:status`
-  - `guidance:codex:pre-command`, `guidance:codex:pre-edit`, `guidance:codex:pre-task`
-  - `guidance:codex:post-edit`, `guidance:codex:post-task`
-  - `guidance:codex:session-start`, `guidance:codex:session-end`
-
-## Codex integration runbook
+After installation, these scripts are available in the target repo:
 
 ```bash
-# initialize lifecycle context
 npm run guidance:codex:session-start
-
-# gate the task and operations
 npm run guidance:codex:pre-task -- --task-id task-123 --description "Implement feature X"
 npm run guidance:codex:pre-command -- --task-id task-123 --command "git status"
 npm run guidance:codex:pre-edit -- --task-id task-123 --file src/example.ts --operation modify
-
-# record completion
 npm run guidance:codex:post-edit -- --task-id task-123 --file src/example.ts
 npm run guidance:codex:post-task -- --task-id task-123 --status completed --description "Implement feature X"
 npm run guidance:codex:session-end -- --task-id task-123
 ```
 
-Validation:
+Validation smoke check:
+
 ```bash
 npm run guidance:codex:status
 npm run guidance:codex:pre-task -- --task-id smoke-1 --description "smoke" --skip-cf-hooks
 ```
 
-Expected output is JSON:
-- `handler.ok: true` means local bridge + hook-handler path passed.
-- `claudeFlowHook.ok: true` means secondary `@claude-flow/cli` hook invocation passed.
-
-## Swarm commands
-
-```bash
-npm run swarm:init
-npm run swarm:route
-```
+Expected JSON output:
+- `handler.ok: true` -> local bridge + hook-handler path succeeded
+- `claudeFlowHook.ok: true` -> secondary `@claude-flow/cli` hook invocation succeeded
 
 ## Notes
 
-- Existing target repo config is merged, not replaced.
-- `CLAUDE.local.md` is created if missing and added to `.gitignore`.
-- The scaffold includes docs that explain operational details.
+- Target repo config is merged, not replaced.
+- Default local guidance file is `CLAUDE.local.md` (gitignored).
+- Advanced reference docs are installed into target `docs/`.
+
+## Links
+
+- GitHub: https://github.com/sparkling/claude-flow-guidance-implementation
+- Issues: https://github.com/sparkling/claude-flow-guidance-implementation/issues
+- Package: https://www.npmjs.com/package/claude-flow-guidance-implementation

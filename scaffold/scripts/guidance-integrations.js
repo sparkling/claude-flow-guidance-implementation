@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { createGuidanceAdvancedRuntime } from '../src/guidance/advanced-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(
+  process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
+);
 
 function usage() {
   console.log(`Usage:

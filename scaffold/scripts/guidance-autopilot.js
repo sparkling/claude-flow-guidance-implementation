@@ -19,7 +19,9 @@ import { createCompiler } from '@claude-flow/guidance/compiler';
 import { createSyntheticContentAwareExecutor } from '../src/guidance/content-aware-executor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(
+  process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
+);
 
 const DEFAULTS = {
   mode: 'once',

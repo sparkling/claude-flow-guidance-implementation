@@ -6,7 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { scaffold } from '@claude-flow/guidance/generators';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(
+  process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
+);
 const defaultOutputDir = resolve(rootDir, '.claude-flow', 'guidance', 'scaffold');
 
 function parseArg(flag) {

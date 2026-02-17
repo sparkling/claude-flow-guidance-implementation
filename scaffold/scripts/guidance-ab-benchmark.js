@@ -7,7 +7,9 @@ import { abBenchmark } from '@claude-flow/guidance/analyzer';
 import { createSyntheticContentAwareExecutor } from '../src/guidance/content-aware-executor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(
+  process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
+);
 const guidanceDir = resolve(rootDir, '.claude-flow', 'guidance');
 const reportPath = resolve(guidanceDir, 'ab-benchmark-report.json');
 

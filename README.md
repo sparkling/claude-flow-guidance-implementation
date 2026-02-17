@@ -47,6 +47,24 @@ npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target 
 npx --yes -p claude-flow-guidance-implementation cf-guidance-impl verify --target ~/source/my-project
 ```
 
+## Package Runtime Mode (No Local Guidance Code)
+
+You can run guidance directly from `node_modules` and avoid committing copied guidance runtime files.
+
+Example `package.json` scripts in a target repo:
+
+```bash
+"guidance:analyze": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/analyze-guidance.js",
+"guidance:optimize": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-autopilot.js --once --apply --source manual",
+"guidance:ab-benchmark": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-ab-benchmark.js",
+"guidance:codex:status": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-codex-bridge.js status"
+```
+
+Project root resolution for scaffold scripts:
+- `GUIDANCE_PROJECT_DIR` (if set)
+- else `CLAUDE_PROJECT_DIR` (if set)
+- else current working directory (`process.cwd()`)
+
 ## CLI commands
 
 ```bash

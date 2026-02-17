@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { createGuidancePhase1Runtime } from '../src/guidance/phase1-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = resolve(__dirname, '..');
+const rootDir = resolve(
+  process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
+);
 
 function usage() {
   console.log(`Usage:

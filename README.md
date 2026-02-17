@@ -30,12 +30,17 @@ cd ~/source
 git clone https://github.com/sparkling/claude-flow-guidance-implementation.git
 cd claude-flow-guidance-implementation
 
-# install into another repo
-node bin/cf-guidance-impl.mjs install --target ~/source/my-project --install-deps
+# initialize + wire another repo (runs `claude-flow init --dual`, install, verify)
+node bin/cf-guidance-impl.mjs init --target ~/source/my-project --install-deps
 
 # verify the wiring
 node bin/cf-guidance-impl.mjs verify --target ~/source/my-project
 ```
+
+Init command options:
+- `--no-dual`: run `claude-flow init` without `--dual`
+- `--skip-cf-init`: skip `claude-flow init` and only apply toolkit wiring
+- `--no-verify`: skip post-install verification
 
 ## Integration modes for other repos
 
@@ -43,8 +48,8 @@ node bin/cf-guidance-impl.mjs verify --target ~/source/my-project
 Keep this repo as a shared toolkit and run installer into target repos:
 
 ```bash
-node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs install --target ~/source/repo-a --install-deps
-node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs install --target ~/source/repo-b --install-deps
+node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs init --target ~/source/repo-a --install-deps
+node ~/source/claude-flow-guidance-implementation/bin/cf-guidance-impl.mjs init --target ~/source/repo-b --install-deps
 ```
 
 ## 2) Submodule mode

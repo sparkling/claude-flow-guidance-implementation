@@ -349,3 +349,67 @@ export function verifyRepo({ targetRepo }) {
     },
   };
 }
+
+export function initRepo({
+  toolkitRoot,
+  targetRepo,
+  force = false,
+  installDeps = false,
+  dual = true,
+  skipCfInit = false,
+  verify = true,
+}) {
+  const target = resolve(targetRepo);
+  if (!existsSync(target)) {
+    throw new Error(`Target repo does not exist: ${target}`);
+  }
+
+  let claudeFlowInit = {
+    skipped: true,
+    reason: '--skip-cf-init',
+  };
+
+  if (!skipCfInit) {
+    const initArgs = ['@claude-flow/cli@latest', 'init'];
+    if (dual) initArgs.push('--dual');
+
+    const initResult = run('npx', initArgs, target);
+    claudeFlowInit = {
+      skipped: false,
+      command: `npx ${initArgs.join(' ')}`,
+      exitCode: initResult.status,
+      stdout: initResult.stdout.trim().split('\n').slice(-12).join('\n'),
+      stderr: initResult.stderr.trim().split('\n').slice(-12).join('\n'),
+    };
+
+    if (initResult.status !== 0) {
+      throw new Error(
+        `claude-flow init failed in ${target}:\n${claudeFlowInit.stderr || claudeFlowInit.stdout}`
+      );
+    }
+  }
+
+  const install = installIntoRepo({
+    toolkitRoot,
+    targetRepo: target,
+    force,
+    installDeps,
+  });
+
+  let verifyReport = null;
+  if (verify) {
+    verifyReport = verifyRepo({ targetRepo: target });
+    if (!verifyReport.passed) {
+      throw new Error(
+        `Guidance wiring verification failed in ${target}. Run cf-guidance-impl verify --target ${target} for details.`
+      );
+    }
+  }
+
+  return {
+    target,
+    claudeFlowInit,
+    install,
+    verify: verifyReport,
+  };
+}

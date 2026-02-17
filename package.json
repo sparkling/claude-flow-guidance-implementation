@@ -1,6 +1,6 @@
 {
   "name": "claude-flow-guidance-implementation",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Implementation kit for wiring @claude-flow/guidance into Claude Code and Codex repos with hook automation",
   "type": "module",
   "private": false,
@@ -10,7 +10,7 @@
     "type": "git",
     "url": "git+https://github.com/sparkling/claude-flow-guidance-implementation.git"
   },
-  "homepage": "https://sparkling.github.io/claude-flow/guidance",
+  "homepage": "https://sparklingideas.co.uk/guidance",
   "bugs": {
     "url": "https://github.com/sparkling/claude-flow-guidance-implementation/issues"
   },

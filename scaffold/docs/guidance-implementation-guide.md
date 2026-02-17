@@ -112,6 +112,42 @@ Codex path in this repo:
   - `GUIDANCE_EVENT_FAIL_CLOSED=0` (current default): fail open
   - `GUIDANCE_EVENT_FAIL_CLOSED=1`: fail closed
 
+## Codex lifecycle runbook
+
+Codex integration is command-driven in this repo. Run bridge commands in this order:
+
+1. Session start:
+```bash
+npm run guidance:codex:session-start
+```
+
+2. Before task execution:
+```bash
+npm run guidance:codex:pre-task -- --task-id task-123 --description "Implement feature X"
+```
+
+3. Before risky command/edit operations:
+```bash
+npm run guidance:codex:pre-command -- --task-id task-123 --command "git status"
+npm run guidance:codex:pre-edit -- --task-id task-123 --file src/example.ts --operation modify
+```
+
+4. After edits/task completion:
+```bash
+npm run guidance:codex:post-edit -- --task-id task-123 --file src/example.ts
+npm run guidance:codex:post-task -- --task-id task-123 --status completed --description "Implement feature X"
+```
+
+5. Session end:
+```bash
+npm run guidance:codex:session-end -- --task-id task-123
+```
+
+Verification expectations:
+- Bridge output is JSON with `handler.ok: true` when local enforcement path succeeds.
+- `claudeFlowHook.ok: true` indicates secondary `@claude-flow/cli` hook telemetry succeeded.
+- Use `--skip-cf-hooks` for local smoke tests if you only want bridge/handler validation.
+
 ---
 
 ## 6) Command Surface You Should Use

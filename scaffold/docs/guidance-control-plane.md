@@ -360,6 +360,29 @@ npm run guidance:optimize
 npm run guidance:all
 ```
 
+### Codex lifecycle workflow (bridge)
+```bash
+# start/restore lifecycle context
+npm run guidance:codex:session-start
+
+# gate task and operations
+npm run guidance:codex:pre-task -- --task-id task-123 --description "Implement feature X"
+npm run guidance:codex:pre-command -- --task-id task-123 --command "git status"
+npm run guidance:codex:pre-edit -- --task-id task-123 --file src/example.ts --operation modify
+
+# finalize learning/ledger
+npm run guidance:codex:post-edit -- --task-id task-123 --file src/example.ts
+npm run guidance:codex:post-task -- --task-id task-123 --status completed --description "Implement feature X"
+npm run guidance:codex:session-end -- --task-id task-123
+```
+
+Quick verification:
+```bash
+npm run guidance:codex:status
+npm run guidance:codex:pre-task -- --task-id smoke-1 --description "smoke" --skip-cf-hooks
+```
+Expected result: JSON output with `handler.ok: true`; when not skipping, expect `claudeFlowHook.ok: true`.
+
 ### Continuous repo workflow
 ```bash
 npm run guidance:autopilot:daemon

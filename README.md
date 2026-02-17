@@ -69,6 +69,33 @@ Copy `scaffold/` manually and merge settings/scripts manually.
   - `guidance:codex:post-edit`, `guidance:codex:post-task`
   - `guidance:codex:session-start`, `guidance:codex:session-end`
 
+## Codex integration runbook
+
+```bash
+# initialize lifecycle context
+npm run guidance:codex:session-start
+
+# gate the task and operations
+npm run guidance:codex:pre-task -- --task-id task-123 --description "Implement feature X"
+npm run guidance:codex:pre-command -- --task-id task-123 --command "git status"
+npm run guidance:codex:pre-edit -- --task-id task-123 --file src/example.ts --operation modify
+
+# record completion
+npm run guidance:codex:post-edit -- --task-id task-123 --file src/example.ts
+npm run guidance:codex:post-task -- --task-id task-123 --status completed --description "Implement feature X"
+npm run guidance:codex:session-end -- --task-id task-123
+```
+
+Validation:
+```bash
+npm run guidance:codex:status
+npm run guidance:codex:pre-task -- --task-id smoke-1 --description "smoke" --skip-cf-hooks
+```
+
+Expected output is JSON:
+- `handler.ok: true` means local bridge + hook-handler path passed.
+- `claudeFlowHook.ok: true` means secondary `@claude-flow/cli` hook invocation passed.
+
 ## Swarm commands
 
 ```bash

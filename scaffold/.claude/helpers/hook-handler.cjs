@@ -50,8 +50,8 @@ const prompt = process.env.PROMPT || (stdinData.tool_input && stdinData.tool_inp
 
 function launchGuidanceAutopilot(source) {
   if (process.env.GUIDANCE_AUTOPILOT_ENABLED === '0') return;
-  const projectDir = process.env.CLAUDE_PROJECT_DIR || process.cwd();
-  const scriptPath = path.join(projectDir, 'scripts', 'guidance-autopilot.js');
+  const projectDir = getProjectDir();
+  const scriptPath = resolveGuidanceScriptPath('guidance-autopilot.js');
   if (!fs.existsSync(scriptPath)) return;
 
   try {
@@ -91,8 +91,22 @@ function getProjectDir() {
   return process.env.CLAUDE_PROJECT_DIR || process.cwd();
 }
 
+function getBundledScriptPath(scriptName) {
+  return path.resolve(__dirname, '..', '..', 'scripts', scriptName);
+}
+
+function resolveGuidanceScriptPath(scriptName) {
+  const localPath = path.join(getProjectDir(), 'scripts', scriptName);
+  if (fs.existsSync(localPath)) return localPath;
+
+  const bundledPath = getBundledScriptPath(scriptName);
+  if (fs.existsSync(bundledPath)) return bundledPath;
+
+  return localPath;
+}
+
 function getGuidanceScriptPath() {
-  return path.join(getProjectDir(), 'scripts', 'guidance-integrations.js');
+  return resolveGuidanceScriptPath('guidance-integrations.js');
 }
 
 function safeString(value, fallback) {

@@ -1,0 +1,23 @@
+{
+  "name": "claude-flow-guidance-implementation",
+  "version": "0.1.0",
+  "description": "Reusable guidance control-plane implementation kit for wiring @claude-flow/guidance into any repo",
+  "type": "module",
+  "private": false,
+  "bin": {
+    "cf-guidance-impl": "./bin/cf-guidance-impl.mjs"
+  },
+  "scripts": {
+    "lint": "node ./bin/cf-guidance-impl.mjs verify --target .",
+    "swarm:init": "npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized",
+    "swarm:route": "npx @claude-flow/cli@latest hooks route --task \"implement reusable guidance integration kit\""
+  },
+  "keywords": [
+    "claude-flow",
+    "guidance",
+    "hooks",
+    "claude-code",
+    "automation"
+  ],
+  "license": "MIT"
+}

@@ -19,6 +19,8 @@ Reusable implementation kit for wiring `@claude-flow/guidance` into any repo wit
 - JSON merge logic for:
   - `package.json` scripts + dependencies
   - `.claude/settings.json` env + hooks
+  - `.agents/config.toml` Codex bridge section
+  - `AGENTS.md` Codex lifecycle usage section
 
 ## Quickstart
 
@@ -55,12 +57,17 @@ Copy `scaffold/` manually and merge settings/scripts manually.
 
 - Hook flow: `PreToolUse`/`PostToolUse`/`SessionStart`/`SessionEnd`
 - Guidance events: `pre-command`, `pre-edit`, `pre-task`, `post-edit`, `post-task`, `session-end`
+- Codex lifecycle bridge: `scripts/guidance-codex-bridge.js`
 - Background session-end autopilot launch
 - NPM wrappers:
   - `guidance:analyze`, `guidance:status`, `guidance:all`
   - `guidance:optimize`, `guidance:ab-benchmark`
   - `guidance:scaffold`
   - `guidance:autopilot:once`, `guidance:autopilot:daemon`
+  - `guidance:codex:status`
+  - `guidance:codex:pre-command`, `guidance:codex:pre-edit`, `guidance:codex:pre-task`
+  - `guidance:codex:post-edit`, `guidance:codex:post-task`
+  - `guidance:codex:session-start`, `guidance:codex:session-end`
 
 ## Swarm commands
 

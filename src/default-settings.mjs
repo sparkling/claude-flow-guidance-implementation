@@ -95,6 +95,14 @@ export const GUIDANCE_PACKAGE_SCRIPTS = {
   'guidance:conformance': 'node scripts/guidance-integrations.js conformance',
   'guidance:evolution': 'node scripts/guidance-integrations.js evolution',
   'guidance:runtime': 'node scripts/guidance-runtime.js demo',
+  'guidance:codex:status': 'node scripts/guidance-codex-bridge.js status',
+  'guidance:codex:pre-command': 'node scripts/guidance-codex-bridge.js pre-command',
+  'guidance:codex:pre-edit': 'node scripts/guidance-codex-bridge.js pre-edit',
+  'guidance:codex:pre-task': 'node scripts/guidance-codex-bridge.js pre-task',
+  'guidance:codex:post-edit': 'node scripts/guidance-codex-bridge.js post-edit',
+  'guidance:codex:post-task': 'node scripts/guidance-codex-bridge.js post-task',
+  'guidance:codex:session-start': 'node scripts/guidance-codex-bridge.js session-start',
+  'guidance:codex:session-end': 'node scripts/guidance-codex-bridge.js session-end',
 };
 
 export const GUIDANCE_PACKAGE_DEPS = {

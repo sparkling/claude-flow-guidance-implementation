@@ -69,7 +69,9 @@ This repo now has manual command-bridge wiring from Claude hooks into guidance r
 | Advanced runtime (trust/adversarial/proof/conformance/evolution) | `src/guidance/advanced-runtime.js` | Implemented |
 | Event bridge entrypoint | `scripts/guidance-integrations.js` | Implemented |
 | Hook bridge and event dispatch | `.claude/helpers/hook-handler.cjs` | Implemented |
+| Codex lifecycle bridge | `scripts/guidance-codex-bridge.js` | Implemented |
 | Claude hook config | `.claude/settings.json` | Wired |
+| Codex lifecycle command map | `.agents/config.toml`, `AGENTS.md` | Wired |
 | Analysis / benchmark / autopilot scripts | `scripts/analyze-guidance.js`, `scripts/guidance-ab-benchmark.js`, `scripts/guidance-autopilot.js` | Implemented |
 | Implementation docs | `docs/guidance-control-plane.md`, this document | Updated |
 
@@ -86,6 +88,12 @@ Execution chain:
 5. Pre-events can block, post-events persist governance state
 
 This is used because Claude Code hooks here are command-based, not direct in-process `HookRegistry` injection.
+
+Codex path in this repo:
+1. Run lifecycle command via `scripts/guidance-codex-bridge.js`
+2. Bridge forwards to `.claude/helpers/hook-handler.cjs` with normalized payload
+3. Hook handler dispatches into `scripts/guidance-integrations.js event ...`
+4. Optional best-effort `npx @claude-flow/cli@latest hooks ...` telemetry runs
 
 ## Event mapping
 
@@ -140,10 +148,18 @@ npm run guidance:ab-benchmark
 npm run guidance:optimize
 npm run guidance:autopilot:once
 npm run guidance:autopilot:daemon
+npm run guidance:codex:status
+npm run guidance:codex:pre-command -- --command "git status"
+npm run guidance:codex:pre-edit -- --file src/example.ts
+npm run guidance:codex:pre-task -- --description "Implement feature X"
+npm run guidance:codex:post-edit -- --file src/example.ts
+npm run guidance:codex:post-task -- --task-id task-123 --status completed
+npm run guidance:codex:session-start
+npm run guidance:codex:session-end
 ```
 
 Use upstream CLI for baseline guidance operations.
-Use repo wrappers for wired runtime checks, advanced module exercises, and autopilot promotion flow.
+Use repo wrappers for wired runtime checks, advanced module exercises, autopilot promotion flow, and Codex lifecycle dispatch.
 
 ---
 
@@ -257,6 +273,7 @@ npx claude-flow guidance --help
 - `.claude/settings.json`
 - `.claude/helpers/hook-handler.cjs`
 - `scripts/guidance-integrations.js`
+- `scripts/guidance-codex-bridge.js`
 
 5. Run baseline checks.
 ```bash
@@ -369,4 +386,3 @@ Upstream/package docs and API:
 - `node_modules/@claude-flow/guidance/dist/hooks.d.ts`
 - `https://github.com/ruvnet/claude-flow/blob/main/v3/%40claude-flow/guidance/README.md`
 - `https://github.com/ruvnet/claude-flow/blob/main/v3/%40claude-flow/guidance/docs/reference/api-quick-reference.md`
-

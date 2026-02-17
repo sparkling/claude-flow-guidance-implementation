@@ -9,6 +9,57 @@ import {
   GUIDANCE_PACKAGE_SCRIPTS,
 } from './default-settings.mjs';
 
+const GUIDANCE_CODEX_CONFIG_BLOCK = [
+  '# =============================================================================',
+  '# Guidance Codex Bridge',
+  '# =============================================================================',
+  '',
+  '[guidance_codex]',
+  'enabled = true',
+  'script = "scripts/guidance-codex-bridge.js"',
+  'hook_handler = ".claude/helpers/hook-handler.cjs"',
+  'run_claude_flow_cli_hooks = true',
+  '',
+  '[guidance_codex.commands]',
+  'status = "npm run guidance:codex:status"',
+  'pre_command = "npm run guidance:codex:pre-command -- --command \\"<bash command>\\""',
+  'pre_edit = "npm run guidance:codex:pre-edit -- --file <path>"',
+  'pre_task = "npm run guidance:codex:pre-task -- --description \\"<task description>\\""',
+  'post_edit = "npm run guidance:codex:post-edit -- --file <path>"',
+  'post_task = "npm run guidance:codex:post-task -- --task-id <id> --status completed"',
+  'session_start = "npm run guidance:codex:session-start"',
+  'session_end = "npm run guidance:codex:session-end"',
+  '',
+].join('\n');
+
+const GUIDANCE_CODEX_AGENTS_BLOCK = [
+  '## Guidance Lifecycle Wiring (Codex)',
+  '',
+  'Codex does not expose Claude Code-style event-command hook maps in `config.toml`.',
+  'This project uses an explicit bridge script:',
+  '',
+  '- `scripts/guidance-codex-bridge.js` -> dispatches lifecycle events to:',
+  '  - `.claude/helpers/hook-handler.cjs` (enforcement path)',
+  '  - optional `npx @claude-flow/cli@latest hooks ...` telemetry calls',
+  '',
+  'Primary commands:',
+  '',
+  '```bash',
+  'npm run guidance:codex:session-start',
+  'npm run guidance:codex:pre-task -- --description "Implement feature X"',
+  'npm run guidance:codex:pre-command -- --command "git status"',
+  'npm run guidance:codex:pre-edit -- --file src/example.ts',
+  'npm run guidance:codex:post-edit -- --file src/example.ts',
+  'npm run guidance:codex:post-task -- --task-id task-123 --status completed',
+  'npm run guidance:codex:session-end',
+  '```',
+  '',
+  'Control flags:',
+  '- `--skip-cf-hooks` skips secondary `@claude-flow/cli` hook invocations',
+  '- `GUIDANCE_CODEX_SKIP_CF_HOOKS=1` disables secondary invocations globally',
+  '',
+].join('\n');
+
 function ensureDir(path) {
   mkdirSync(path, { recursive: true });
 }
@@ -78,6 +129,15 @@ function run(cmd, args, cwd) {
   });
 }
 
+function appendBlockIfMissing(path, marker, block, fallback = '') {
+  const existing = existsSync(path) ? readFileSync(path, 'utf-8') : fallback;
+  if (existing.includes(marker)) return false;
+  const trimmed = existing.trimEnd();
+  const prefix = trimmed ? `${trimmed}\n\n` : '';
+  writeText(path, `${prefix}${block.trim()}\n`);
+  return true;
+}
+
 export function installIntoRepo({ toolkitRoot, targetRepo, force = false, installDeps = false }) {
   const target = resolve(targetRepo);
   const scaffold = resolve(toolkitRoot, 'scaffold');
@@ -140,6 +200,21 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
 
   writeJson(settingsPath, settings);
 
+  const agentsConfigPath = resolve(target, '.agents/config.toml');
+  const codexConfigAdded = appendBlockIfMissing(
+    agentsConfigPath,
+    '[guidance_codex]',
+    GUIDANCE_CODEX_CONFIG_BLOCK
+  );
+
+  const agentsDocPath = resolve(target, 'AGENTS.md');
+  const codexAgentsDocAdded = appendBlockIfMissing(
+    agentsDocPath,
+    '## Guidance Lifecycle Wiring (Codex)',
+    GUIDANCE_CODEX_AGENTS_BLOCK,
+    '# Project\n\n'
+  );
+
   // Ensure local guidance file and gitignore entries.
   writeMissingStub(
     resolve(target, 'CLAUDE.local.md'),
@@ -162,6 +237,7 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
       '.claude/helpers/hook-handler.cjs',
       'scripts/guidance-integrations.js',
       'scripts/guidance-runtime.js',
+      'scripts/guidance-codex-bridge.js',
       'scripts/guidance-autopilot.js',
       'scripts/guidance-ab-benchmark.js',
       'scripts/scaffold-guidance.js',
@@ -174,6 +250,10 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
     ],
     packageUpdated: packagePath,
     settingsUpdated: settingsPath,
+    agentsConfigUpdated: agentsConfigPath,
+    agentsDocUpdated: agentsDocPath,
+    codexConfigAdded,
+    codexAgentsDocAdded,
     installDeps,
   };
 
@@ -196,6 +276,7 @@ export function verifyRepo({ targetRepo }) {
     '.claude/helpers/hook-handler.cjs',
     'scripts/guidance-integrations.js',
     'scripts/guidance-runtime.js',
+    'scripts/guidance-codex-bridge.js',
     'src/guidance/phase1-runtime.js',
     '.claude/settings.json',
     'package.json',
@@ -212,6 +293,7 @@ export function verifyRepo({ targetRepo }) {
     '.claude/helpers/hook-handler.cjs',
     'scripts/guidance-integrations.js',
     'scripts/guidance-runtime.js',
+    'scripts/guidance-codex-bridge.js',
   ];
 
   for (const relPath of checkFiles) {
@@ -238,10 +320,17 @@ export function verifyRepo({ targetRepo }) {
     target
   );
 
+  const smokeCodex = run(
+    'node',
+    ['scripts/guidance-codex-bridge.js', 'status', '--skip-cf-hooks'],
+    target
+  );
+
   const passed =
     checks.every((check) => check.exists) &&
     syntaxChecks.every((check) => check.ok) &&
-    smoke.status === 0;
+    smoke.status === 0 &&
+    smokeCodex.status === 0;
 
   return {
     target,
@@ -252,6 +341,11 @@ export function verifyRepo({ targetRepo }) {
       exitCode: smoke.status,
       stdout: smoke.stdout.trim(),
       stderr: smoke.stderr.trim(),
+    },
+    smokeCodex: {
+      exitCode: smokeCodex.status,
+      stdout: smokeCodex.stdout.trim(),
+      stderr: smokeCodex.stderr.trim(),
     },
   };
 }

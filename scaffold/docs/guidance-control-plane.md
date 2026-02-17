@@ -177,6 +177,14 @@ From `package.json`:
 - `npm run guidance:evolution`
 - `npm run guidance:scaffold`
 - `npm run guidance:runtime`
+- `npm run guidance:codex:status`
+- `npm run guidance:codex:pre-command -- --command "git status"`
+- `npm run guidance:codex:pre-edit -- --file src/example.ts`
+- `npm run guidance:codex:pre-task -- --description "Implement feature X"`
+- `npm run guidance:codex:post-edit -- --file src/example.ts`
+- `npm run guidance:codex:post-task -- --task-id task-123 --status completed`
+- `npm run guidance:codex:session-start`
+- `npm run guidance:codex:session-end`
 
 ### What each wrapper does
 
@@ -221,6 +229,11 @@ From `package.json`:
 `guidance:scaffold`
 - Runs `scripts/scaffold-guidance.js`
 - Scaffolds guidance templates into `.claude-flow/guidance/scaffold/`
+
+`guidance:codex:*`
+- Runs `scripts/guidance-codex-bridge.js` lifecycle events
+- Reuses `.claude/helpers/hook-handler.cjs` enforcement path
+- Optionally executes best-effort `npx @claude-flow/cli@latest hooks ...` telemetry
 
 ## Repo Custom Autopilot (Promotion + ADR)
 This repo includes a custom autopilot that is not a built-in CLI command.
@@ -269,9 +282,11 @@ Current repo autopilot promotes only rules already present in `CLAUDE.local.md` 
 ## Hook Integration and Background Automation
 Hook launcher file:
 - `.claude/helpers/hook-handler.cjs`
+- `scripts/guidance-codex-bridge.js` (Codex lifecycle dispatcher)
 
 Claude hook configuration file:
 - `.claude/settings.json`
+- `.agents/config.toml` (Codex command map metadata)
 
 Key integration:
 - On `SessionEnd`, `hook-handler.cjs` launches autopilot as a detached background process.
@@ -289,6 +304,17 @@ Hook paths currently wired in settings:
 - `PostToolUse Task`: `post-task`
 - `PostToolUse Write/Edit`: `post-edit`
 - plus related `entire hooks ...` commands
+
+Codex lifecycle wiring in this repo:
+- `guidance:codex:session-start` -> `session-restore`
+- `guidance:codex:pre-command` -> `pre-bash`
+- `guidance:codex:pre-edit` -> `pre-edit`
+- `guidance:codex:pre-task` -> `pre-task`
+- `guidance:codex:post-edit` -> `post-edit`
+- `guidance:codex:post-task` -> `post-task`
+- `guidance:codex:session-end` -> `session-end`
+
+Each bridge call sends normalized payload to `hook-handler.cjs` and may also run best-effort `npx @claude-flow/cli@latest hooks ...` telemetry unless disabled with `--skip-cf-hooks` or `GUIDANCE_CODEX_SKIP_CF_HOOKS=1`.
 
 ### Autopilot environment toggles
 Recognized by `hook-handler.cjs`:

@@ -1,20 +1,34 @@
 # claude-flow-guidance-implementation
 
-NPM-first implementation kit for wiring `@claude-flow/guidance` into any repository.
+Implementation kit for wiring `@claude-flow/guidance` into real repos with repeatable automation for Claude Code hooks, Codex lifecycle events, and guidance optimization workflows.
 
-It installs a reusable guidance control plane with:
-- Claude Code hook bridge
-- Codex lifecycle bridge
-- guidance runtime scripts
-- autopilot promotion loop (`CLAUDE.local.md` -> `CLAUDE.md`)
-- verification tooling
+## What This Package Is
 
-## Install and run
+This package is an installer and scaffold, not just an API example.  
+It creates a working guidance control plane in a target repo, including:
 
-Use directly from npm (no clone required):
+- hook event wiring (`pre-*` and `post-*`)
+- guidance runtime scripts (`analyze`, `optimize`, `ab-benchmark`, modules)
+- Codex bridge commands (optional)
+- `CLAUDE.local.md` bootstrap for local-only experiments
+- verification checks so setup can be validated immediately
+
+## What `quickstart` is doing
+
+The quickstart commands do two things:
+
+- run `init` to install and wire scripts/config into your target repo
+- run `verify` to confirm that required files, hooks, and syntax checks pass
+
+It is meant to produce a runnable integration, not just generate documentation.
+
+## Quickstart
+
+Use directly from npm:
 
 ```bash
 npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target ~/source/my-project --install-deps
+npx --yes -p claude-flow-guidance-implementation cf-guidance-impl verify --target ~/source/my-project
 ```
 
 Or install as a dev dependency:
@@ -22,50 +36,26 @@ Or install as a dev dependency:
 ```bash
 npm i -D claude-flow-guidance-implementation
 npx cf-guidance-impl init --target ~/source/my-project --install-deps
+npx cf-guidance-impl verify --target ~/source/my-project
 ```
 
-Choose integration target mode explicitly when needed:
+## Integration Modes
+
+| Mode | What gets wired |
+|---|---|
+| `both` (default) | Claude hooks + Codex bridge + guidance scripts |
+| `claude` | Claude hooks + guidance scripts |
+| `codex` | Codex bridge + guidance scripts |
+
+Examples:
 
 ```bash
-# default: both Claude + Codex wiring
 npx cf-guidance-impl init --target ~/source/my-project --target-mode both
-
-# Claude-only wiring (.claude hooks + settings merge)
 npx cf-guidance-impl init --target ~/source/my-project --target-mode claude
-
-# Codex-only wiring (.agents bridge + codex scripts)
 npx cf-guidance-impl init --target ~/source/my-project --target-mode codex
 ```
 
-## Quickstart
-
-```bash
-# 1) initialize and wire a target repo
-npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target ~/source/my-project --install-deps
-
-# 2) verify wiring
-npx --yes -p claude-flow-guidance-implementation cf-guidance-impl verify --target ~/source/my-project
-```
-
-## Package Runtime Mode (No Local Guidance Code)
-
-You can run guidance directly from `node_modules` and avoid committing copied guidance runtime files.
-
-Example `package.json` scripts in a target repo:
-
-```bash
-"guidance:analyze": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/analyze-guidance.js",
-"guidance:optimize": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-autopilot.js --once --apply --source manual",
-"guidance:ab-benchmark": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-ab-benchmark.js",
-"guidance:codex:status": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-codex-bridge.js status"
-```
-
-Project root resolution for scaffold scripts:
-- `GUIDANCE_PROJECT_DIR` (if set)
-- else `CLAUDE_PROJECT_DIR` (if set)
-- else current working directory (`process.cwd()`)
-
-## CLI commands
+## CLI Reference
 
 ```bash
 cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
@@ -73,55 +63,107 @@ cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [
 cf-guidance-impl verify --target <repoPath> [--target-mode both|claude|codex]
 ```
 
-## What `init` does
+## What `init` Changes In Your Target Repo
 
 `cf-guidance-impl init` performs:
-1. runs `npx @claude-flow/cli@latest init` in target repo (unless `--skip-cf-init`)
-2. adds init flags by mode:
-   - `--target-mode both` + default dual -> `--dual`
-   - `--target-mode codex` -> `--codex`
-   - `--target-mode claude` -> no codex flag
-   - `--no-dual` only affects `both` mode (skips `--dual`)
-3. installs scaffold runtime files (`scripts/`, `src/guidance/`, `.claude/helpers/hook-handler.cjs`, docs)
-4. merges target `package.json` scripts + guidance deps (Codex scripts only for `both|codex`)
-5. merges `.claude/settings.json` env and hook blocks (only for `both|claude`)
-6. appends Codex bridge sections to `.agents/config.toml` and `AGENTS.md` (only for `both|codex`)
-7. creates `CLAUDE.local.md` stub and updates `.gitignore`
-8. verifies wiring for selected mode (unless `--no-verify`)
 
-## Codex lifecycle integration
+1. Runs `npx @claude-flow/cli@latest init` unless `--skip-cf-init`.
+2. Adds CLI mode flags automatically:
+   - `both` uses `--dual` unless `--no-dual`
+   - `codex` uses `--codex`
+   - `claude` uses standard init
+3. Copies scaffold runtime files (`scripts/`, `src/guidance/`, docs, hook handler).
+4. Merges guidance scripts and dependencies into `package.json`.
+5. Merges `.claude/settings.json` env and hooks in Claude-enabled modes.
+6. Appends Codex bridge sections to `.agents/config.toml` and `AGENTS.md` in Codex-enabled modes.
+7. Creates `CLAUDE.local.md` (if missing) and appends `CLAUDE.local.md` to `.gitignore`.
+8. Runs verification unless `--no-verify`.
 
-After installation, these scripts are available in the target repo:
+## Installed Scripts (Target Repo)
 
-```bash
-npm run guidance:codex:session-start
-npm run guidance:codex:pre-task -- --task-id task-123 --description "Implement feature X"
-npm run guidance:codex:pre-command -- --task-id task-123 --command "git status"
-npm run guidance:codex:pre-edit -- --task-id task-123 --file src/example.ts --operation modify
-npm run guidance:codex:post-edit -- --task-id task-123 --file src/example.ts
-npm run guidance:codex:post-task -- --task-id task-123 --status completed --description "Implement feature X"
-npm run guidance:codex:session-end -- --task-id task-123
+Core:
+
+- `guidance:analyze`
+- `guidance:optimize`
+- `guidance:autopilot:once`
+- `guidance:autopilot:daemon`
+- `guidance:ab-benchmark`
+- `guidance:status`
+- `guidance:all`
+- `guidance:trust`
+- `guidance:adversarial`
+- `guidance:proof`
+- `guidance:conformance`
+- `guidance:evolution`
+
+Codex lifecycle bridge:
+
+- `guidance:codex:status`
+- `guidance:codex:session-start`
+- `guidance:codex:pre-command`
+- `guidance:codex:pre-edit`
+- `guidance:codex:pre-task`
+- `guidance:codex:post-edit`
+- `guidance:codex:post-task`
+- `guidance:codex:session-end`
+
+## Manual Runtime Mode (No Copied Runtime Files)
+
+You can also execute scripts directly from `node_modules`:
+
+```json
+{
+  "scripts": {
+    "guidance:analyze": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/analyze-guidance.js",
+    "guidance:optimize": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-autopilot.js --once --apply --source manual",
+    "guidance:ab-benchmark": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-ab-benchmark.js",
+    "guidance:codex:status": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-codex-bridge.js status"
+  }
+}
 ```
 
-Validation smoke check:
+Project root resolution for scaffold scripts:
+
+- `GUIDANCE_PROJECT_DIR` if set
+- else `CLAUDE_PROJECT_DIR` if set
+- else `process.cwd()`
+
+## Verify + Smoke Test
 
 ```bash
+npx cf-guidance-impl verify --target ~/source/my-project
+cd ~/source/my-project
+npm run guidance:status
+npm run guidance:analyze
 npm run guidance:codex:status
-npm run guidance:codex:pre-task -- --task-id smoke-1 --description "smoke" --skip-cf-hooks
 ```
 
-Expected JSON output:
-- `handler.ok: true` -> local bridge + hook-handler path succeeded
-- `claudeFlowHook.ok: true` -> secondary `@claude-flow/cli` hook invocation succeeded
+For Codex bridge smoke checks:
 
-## Notes
+```bash
+npm run guidance:codex:pre-task -- --task-id smoke-1 --description "smoke"
+```
 
-- Target repo config is merged, not replaced.
-- Default local guidance file is `CLAUDE.local.md` (gitignored).
-- Advanced reference docs are installed into target `docs/`.
+Expected success signals:
+
+- `handler.ok: true` means local bridge path succeeded
+- `claudeFlowHook.ok: true` means optional `@claude-flow/cli` hook call succeeded
+
+## Installed Files (High-Level)
+
+| Path | Purpose |
+|---|---|
+| `.claude/helpers/hook-handler.cjs` | Event entrypoint for hook dispatch |
+| `scripts/guidance-integrations.js` | Unified guidance module runner |
+| `scripts/guidance-codex-bridge.js` | Codex lifecycle adapter |
+| `scripts/guidance-autopilot.js` | Local-rule optimization/promotion loop |
+| `src/guidance/phase1-runtime.js` | Compile/retrieve/gates/ledger integration |
+| `src/guidance/advanced-runtime.js` | Trust/adversarial/proof/conformance/evolution modules |
+| `docs/guidance-control-plane.md` | Operational overview |
+| `docs/guidance-implementation-guide.md` | Authoritative implementation guide |
 
 ## Links
 
+- Package: https://www.npmjs.com/package/claude-flow-guidance-implementation
 - GitHub: https://github.com/sparkling/claude-flow-guidance-implementation
 - Issues: https://github.com/sparkling/claude-flow-guidance-implementation/issues
-- Package: https://www.npmjs.com/package/claude-flow-guidance-implementation

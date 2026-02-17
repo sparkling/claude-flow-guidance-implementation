@@ -85,6 +85,7 @@ export const GUIDANCE_PACKAGE_SCRIPTS = {
   'guidance:autopilot:once': 'node scripts/guidance-autopilot.js --once --source manual',
   'guidance:autopilot:daemon': 'node scripts/guidance-autopilot.js --daemon --apply --source daemon',
   'guidance:ab-benchmark': 'node scripts/guidance-ab-benchmark.js',
+  'guidance:scaffold': 'node scripts/scaffold-guidance.js',
   'guidance:all': 'node scripts/guidance-integrations.js all',
   'guidance:status': 'node scripts/guidance-integrations.js status',
   'guidance:hooks': 'node scripts/guidance-integrations.js hooks',

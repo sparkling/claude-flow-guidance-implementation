@@ -164,6 +164,7 @@ export function installIntoRepo({ toolkitRoot, targetRepo, force = false, instal
       'scripts/guidance-runtime.js',
       'scripts/guidance-autopilot.js',
       'scripts/guidance-ab-benchmark.js',
+      'scripts/scaffold-guidance.js',
       'scripts/analyze-guidance.js',
       'src/guidance/phase1-runtime.js',
       'src/guidance/advanced-runtime.js',

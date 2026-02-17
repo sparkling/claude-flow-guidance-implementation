@@ -59,6 +59,7 @@ Copy `scaffold/` manually and merge settings/scripts manually.
 - NPM wrappers:
   - `guidance:analyze`, `guidance:status`, `guidance:all`
   - `guidance:optimize`, `guidance:ab-benchmark`
+  - `guidance:scaffold`
   - `guidance:autopilot:once`, `guidance:autopilot:daemon`
 
 ## Swarm commands
@@ -73,4 +74,3 @@ npm run swarm:route
 - Existing target repo config is merged, not replaced.
 - `CLAUDE.local.md` is created if missing and added to `.gitignore`.
 - The scaffold includes docs that explain operational details.
-

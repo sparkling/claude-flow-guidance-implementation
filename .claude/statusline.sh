@@ -161,7 +161,7 @@ SUBAGENT_COUNT=$(ps aux 2>/dev/null | grep -E "claude.*Task\|subagent\|agent_spa
 SUBAGENT_COUNT=${SUBAGENT_COUNT:-0}
 
 # Get swarm communication stats
-SWARM_COMMS="${PROJECT_DIR}/.claude/helpers/swarm-comms.sh"
+SWARM_COMMS="${PROJECT_DIR}/.claude/helpers/v3-ops/swarm-comms.sh"
 QUEUE_PENDING=0
 if [ -x "$SWARM_COMMS" ]; then
   COMMS_STATS=$("$SWARM_COMMS" stats 2>/dev/null || echo '{"queue":0}')

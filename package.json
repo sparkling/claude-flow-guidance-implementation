@@ -1,6 +1,6 @@
 {
   "name": "claude-flow-guidance-implementation",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Implementation kit for wiring @claude-flow/guidance into Claude Code and Codex repos with hook automation",
   "type": "module",
   "private": false,
@@ -20,6 +20,26 @@
   "publishConfig": {
     "access": "public"
   },
+  "exports": {
+    "./installer": {
+      "import": "./src/installer.mjs"
+    },
+    "./settings": {
+      "import": "./src/default-settings.mjs"
+    },
+    "./runtime": {
+      "import": "./scaffold/src/guidance/advanced-runtime.js"
+    },
+    "./phase1": {
+      "import": "./scaffold/src/guidance/phase1-runtime.js"
+    },
+    "./executor": {
+      "import": "./scaffold/src/guidance/content-aware-executor.js"
+    },
+    "./hook-handler": {
+      "require": "./scaffold/.claude/helpers/hook-handler.cjs"
+    }
+  },
   "files": [
     "bin",
     "src",
@@ -28,12 +48,23 @@
     "LICENSE"
   ],
   "bin": {
-    "cf-guidance-impl": "bin/cf-guidance-impl.mjs"
+    "cf-guidance-impl": "bin/cf-guidance-impl.mjs",
+    "cf-guidance": "scaffold/scripts/guidance-integrations.js",
+    "cf-guidance-runtime": "scaffold/scripts/guidance-runtime.js",
+    "cf-guidance-autopilot": "scaffold/scripts/guidance-autopilot.js",
+    "cf-guidance-benchmark": "scaffold/scripts/guidance-ab-benchmark.js",
+    "cf-guidance-codex": "scaffold/scripts/guidance-codex-bridge.js",
+    "cf-guidance-analyze": "scaffold/scripts/analyze-guidance.js",
+    "cf-guidance-scaffold": "scaffold/scripts/scaffold-guidance.js"
   },
   "scripts": {
     "lint": "node ./bin/cf-guidance-impl.mjs verify --target .",
     "swarm:init": "npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized",
     "swarm:route": "npx @claude-flow/cli@latest hooks route --task \"implement reusable guidance integration kit\""
+  },
+  "dependencies": {
+    "@claude-flow/guidance": "^3.0.0-alpha.1",
+    "@claude-flow/hooks": "^3.0.0-alpha.7"
   },
   "keywords": [
     "claude-flow",

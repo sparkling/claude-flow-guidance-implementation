@@ -86,6 +86,14 @@ const commands = {
     return session;
   },
 
+  get: (key) => {
+    if (!fs.existsSync(SESSION_FILE)) return null;
+    try {
+      const session = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf-8'));
+      return key ? (session.context || {})[key] : session.context;
+    } catch { return null; }
+  },
+
   update: (key, value) => {
     if (!fs.existsSync(SESSION_FILE)) {
       console.log('No active session');
@@ -121,7 +129,7 @@ const [,, command, ...args] = process.argv;
 if (command && commands[command]) {
   commands[command](...args);
 } else {
-  console.log('Usage: session.js <start|restore|end|status|update|metric> [args]');
+  console.log('Usage: session.cjs <start|restore|end|status|get|update|metric> [args]');
 }
 
 module.exports = commands;

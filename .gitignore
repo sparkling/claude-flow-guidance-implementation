@@ -2,6 +2,7 @@ node_modules/
 .DS_Store
 npm-debug.log*
 vectors.db
+ruvector.db
 .swarm/
 .claude-flow/data/
 .claude-flow/logs/
@@ -10,11 +11,10 @@ vectors.db
 # Codex local configuration
 .codex/
 
-# Claude Flow runtime data
-.claude-flow/data/
-.claude-flow/logs/
-
 # Environment variables
 .env
 .env.local
 .env.*.local
+
+# Claude Code local config
+CLAUDE.local.md

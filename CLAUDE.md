@@ -1,5 +1,40 @@
 # Claude Code Configuration - Claude Flow V3
 
+## Project Description
+
+`claude-flow-guidance-implementation` is a turnkey integration kit that wires [`@claude-flow/guidance`](https://github.com/ruvnet/claude-flow/blob/main/v3/@claude-flow/guidance/README.md) into any Claude Code or Codex repository. It provides:
+
+- **One-command installer** (`cf-guidance-impl init`) that scaffolds hook-handler shims, merges Claude Code `settings.json` hooks, injects Codex `config.toml` bridge entries, and adds npm scripts — targeting Claude Code, Codex, or both.
+- **Hook-handler dispatch** (`.claude/helpers/hook-handler.cjs`) — a CommonJS dispatcher that routes Claude Code lifecycle events (`pre-bash`, `pre-edit`, `post-edit`, `pre-task`, `post-task`, `session-restore`, `session-end`) through the `@claude-flow/guidance` control plane for policy enforcement, intelligent routing, session persistence, and neural learning.
+- **Codex bridge** (`guidance-codex-bridge.js`) — maps Codex lifecycle events to the same hook-handler, giving Codex repos equivalent guidance enforcement without Claude Code's native hook system.
+- **Guidance runtime & analysis tools** — an advanced runtime (`advanced-runtime.js`) that layers trust scoring, adversarial threat detection, collusion detection, proof chains, conformance testing, and rule evolution on top of the base guidance engine; plus an analyzer (`analyze-guidance.js`) that compiles CLAUDE.md into a policy bundle and scores it across 6 dimensions.
+- **Autopilot & A/B benchmarking** — `guidance-autopilot.js` continuously or one-shot optimizes CLAUDE.md rules by promoting high-impact local experiments, while `guidance-ab-benchmark.js` runs controlled baseline-vs-guided comparisons using a synthetic content-aware executor.
+- **Verification** (`cf-guidance-impl verify`) — validates that all hook wiring, dependency declarations, helper compatibility pairs (.cjs/.js), and smoke tests pass in the target repo.
+
+### Key modules
+
+| Export path | Description |
+|---|---|
+| `./installer` | `initRepo`, `installIntoRepo`, `verifyRepo` functions |
+| `./settings` | Default env vars, hook definitions, npm scripts, and dependency declarations |
+| `./runtime` | Advanced guidance runtime (trust, adversarial, proof, conformance, evolution) |
+| `./phase1` | Phase-1 guidance runtime (lighter-weight policy enforcement) |
+| `./executor` | Synthetic content-aware executor for benchmark isolation |
+| `./hook-handler` | CJS hook dispatcher for Claude Code and Codex bridge consumption |
+
+### CLI binaries
+
+| Command | Purpose |
+|---|---|
+| `cf-guidance-impl` | Init / install / verify guidance wiring in a target repo |
+| `cf-guidance` | Run all integration suites (status, hooks, trust, adversarial, proof, conformance, evolution) |
+| `cf-guidance-runtime` | Demo the guidance runtime |
+| `cf-guidance-autopilot` | One-shot or daemon-mode CLAUDE.md rule optimization |
+| `cf-guidance-benchmark` | A/B benchmark (baseline vs guided) |
+| `cf-guidance-codex` | Codex lifecycle bridge commands |
+| `cf-guidance-analyze` | Compile and score CLAUDE.md policy bundle |
+| `cf-guidance-scaffold` | Scaffold guidance files into a new project |
+
 ## Behavioral Rules (Always Enforced)
 
 - Do what has been asked; nothing more, nothing less

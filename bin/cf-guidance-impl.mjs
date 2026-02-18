@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { initRepo, installIntoRepo, verifyRepo } from '../src/installer.mjs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const toolkitRoot = resolve(__dirname, '..');
 
 function usage() {
   console.log(`Usage:
@@ -40,7 +34,6 @@ async function main() {
 
   if (command === 'init') {
     const result = initRepo({
-      toolkitRoot,
       targetRepo: target,
       targetMode,
       force,
@@ -55,7 +48,6 @@ async function main() {
 
   if (command === 'install') {
     const result = installIntoRepo({
-      toolkitRoot,
       targetRepo: target,
       targetMode,
       force,

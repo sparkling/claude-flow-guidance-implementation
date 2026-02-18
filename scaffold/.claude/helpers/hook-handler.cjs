@@ -9,7 +9,7 @@ const fs = require('fs');
 const { createHash } = require('crypto');
 const { spawn, spawnSync } = require('child_process');
 
-const helpersDir = __dirname;
+const helpersDir = process.env.__GUIDANCE_HELPERS_DIR || __dirname;
 
 function safeRequire(modulePath) {
   try {

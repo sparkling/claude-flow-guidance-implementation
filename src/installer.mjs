@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -8,6 +8,33 @@ import {
   GUIDANCE_PACKAGE_DEPS,
   GUIDANCE_PACKAGE_SCRIPTS,
 } from './default-settings.mjs';
+
+const COMPAT_MODULES = ['router', 'session', 'memory', 'statusline'];
+
+function ensureHelperCompat(helpersDir) {
+  const actions = [];
+  if (!existsSync(helpersDir)) return actions;
+  for (const mod of COMPAT_MODULES) {
+    const cjsPath = resolve(helpersDir, `${mod}.cjs`);
+    const jsPath = resolve(helpersDir, `${mod}.js`);
+    if (existsSync(cjsPath) && !existsSync(jsPath)) {
+      copyFileSync(cjsPath, jsPath);
+      actions.push({ module: mod, action: 'cjs->js' });
+    } else if (existsSync(jsPath) && !existsSync(cjsPath)) {
+      copyFileSync(jsPath, cjsPath);
+      actions.push({ module: mod, action: 'js->cjs' });
+    }
+  }
+  return actions;
+}
+
+function checkHelperCompat(helpersDir) {
+  return COMPAT_MODULES.map((mod) => {
+    const cjs = existsSync(resolve(helpersDir, `${mod}.cjs`));
+    const js = existsSync(resolve(helpersDir, `${mod}.js`));
+    return { module: mod, cjs, js, hasBoth: cjs && js, hasEither: cjs || js };
+  });
+}
 
 const GUIDANCE_CODEX_CONFIG_BLOCK = [
   '# =============================================================================',
@@ -154,31 +181,36 @@ function appendBlockIfMissing(path, marker, block, fallback = '') {
   return true;
 }
 
+const HOOK_HANDLER_SHIM = `#!/usr/bin/env node
+// Thin shim — delegates to the full hook-handler in the npm package.
+// This file is kept local so Claude Code's hook config can reference it by path.
+process.env.__GUIDANCE_HELPERS_DIR = process.env.__GUIDANCE_HELPERS_DIR || __dirname;
+require('claude-flow-guidance-implementation/hook-handler');
+`;
+
 export function installIntoRepo({
-  toolkitRoot,
   targetRepo,
   force = false,
   installDeps = false,
   targetMode = 'both',
 }) {
   const target = resolve(targetRepo);
-  const scaffold = resolve(toolkitRoot, 'scaffold');
   const mode = normalizeTargetMode(targetMode);
 
   if (!existsSync(target)) {
     throw new Error(`Target repo does not exist: ${target}`);
   }
 
-  if (!existsSync(scaffold)) {
-    throw new Error(`Toolkit scaffold not found: ${scaffold}`);
+  // Write thin hook-handler shim (delegates to the npm package).
+  const shimPath = resolve(target, '.claude/helpers/hook-handler.cjs');
+  if (force || !existsSync(shimPath)) {
+    ensureDir(dirname(shimPath));
+    writeText(shimPath, HOOK_HANDLER_SHIM);
   }
 
-  // Copy scaffold files into target.
-  cpSync(scaffold, target, {
-    recursive: true,
-    force,
-    errorOnExist: false,
-  });
+  // Create .js/.cjs compatibility copies for helper modules.
+  // Different hook-handler variants require() with different extensions.
+  const compatActions = ensureHelperCompat(resolve(target, '.claude/helpers'));
 
   // Merge package.json scripts + dependencies.
   const packagePath = resolve(target, 'package.json');
@@ -196,7 +228,7 @@ export function installIntoRepo({
   for (const [name, cmd] of Object.entries(GUIDANCE_PACKAGE_SCRIPTS)) {
     const isCodexScript = name.startsWith('guidance:codex:');
     if (isCodexScript && !usesCodexMode(mode)) continue;
-    if (!(name in packageJson.scripts)) {
+    if (force || !(name in packageJson.scripts)) {
       packageJson.scripts[name] = cmd;
     }
   }
@@ -268,22 +300,10 @@ export function installIntoRepo({
   const summary = {
     target,
     targetMode: mode,
-    copiedFrom: relative(target, scaffold),
     filesInstalled: [
-      '.claude/helpers/hook-handler.cjs',
-      'scripts/guidance-integrations.js',
-      'scripts/guidance-runtime.js',
-      'scripts/guidance-codex-bridge.js',
-      'scripts/guidance-autopilot.js',
-      'scripts/guidance-ab-benchmark.js',
-      'scripts/scaffold-guidance.js',
-      'scripts/analyze-guidance.js',
-      'src/guidance/phase1-runtime.js',
-      'src/guidance/advanced-runtime.js',
-      'src/guidance/content-aware-executor.js',
-      'docs/guidance-control-plane.md',
-      'docs/guidance-implementation-guide.md',
+      '.claude/helpers/hook-handler.cjs (shim)',
     ],
+    compatActions,
     packageUpdated: packagePath,
     settingsUpdated: settingsPath,
     agentsConfigUpdated: agentsConfigPath,
@@ -311,14 +331,10 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   const mode = normalizeTargetMode(targetMode);
   const requiredFiles = [
     '.claude/helpers/hook-handler.cjs',
-    'scripts/guidance-integrations.js',
-    'scripts/guidance-runtime.js',
-    'src/guidance/phase1-runtime.js',
     'package.json',
   ];
 
   if (usesCodexMode(mode)) {
-    requiredFiles.push('scripts/guidance-codex-bridge.js');
     requiredFiles.push('.agents/config.toml');
     requiredFiles.push('AGENTS.md');
   }
@@ -330,14 +346,19 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     checks.push({ path: relPath, exists: existsSync(full) });
   }
 
+  // Verify the package dependency is declared.
+  const packageJson = readJson(resolve(target, 'package.json'), {});
+  const deps = packageJson.dependencies || {};
+  const hasImplDep = 'claude-flow-guidance-implementation' in deps;
+  checks.push({ path: 'dependency:claude-flow-guidance-implementation', exists: hasImplDep });
+
+  // Check .js/.cjs compat pairs exist for helper modules.
+  const compatPairs = checkHelperCompat(resolve(target, '.claude/helpers'));
+
   const syntaxChecks = [];
   const checkFiles = [
     '.claude/helpers/hook-handler.cjs',
-    'scripts/guidance-integrations.js',
-    'scripts/guidance-runtime.js',
   ];
-
-  if (usesCodexMode(mode)) checkFiles.push('scripts/guidance-codex-bridge.js');
 
   for (const relPath of checkFiles) {
     const full = resolve(target, relPath);
@@ -370,14 +391,17 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   if (usesCodexMode(mode)) {
     smokeCodex = run(
       'node',
-      ['scripts/guidance-codex-bridge.js', 'status', '--skip-cf-hooks'],
+      ['-e', 'import("claude-flow-guidance-implementation/hook-handler")'],
       target
     );
   }
 
+  const compatOk = compatPairs.every((p) => !p.hasEither || p.hasBoth);
+
   const passed =
     checks.every((check) => check.exists) &&
     syntaxChecks.every((check) => check.ok) &&
+    compatOk &&
     (!usesClaudeMode(mode) || smoke.status === 0) &&
     (!usesCodexMode(mode) || smokeCodex.status === 0);
 
@@ -386,6 +410,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     targetMode: mode,
     passed,
     files: checks,
+    compatPairs,
     syntaxChecks,
     smoke: {
       exitCode: smoke.status,
@@ -401,7 +426,6 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
 }
 
 export function initRepo({
-  toolkitRoot,
   targetRepo,
   force = false,
   installDeps = false,
@@ -446,7 +470,6 @@ export function initRepo({
   }
 
   const install = installIntoRepo({
-    toolkitRoot,
     targetRepo: target,
     force,
     installDeps,

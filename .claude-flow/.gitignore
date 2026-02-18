@@ -5,3 +5,8 @@ sessions/
 neural/
 *.log
 *.tmp
+daemon.pid
+daemon-state.json
+.trend-cache.json
+metrics/codebase-map.json
+metrics/consolidation.json

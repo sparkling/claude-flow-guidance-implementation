@@ -1,10 +1,152 @@
 # Architecture: claude-flow-guidance-implementation
 
-This document explains how the guidance implementation kit works, from the moment a Claude Code or Codex agent triggers a lifecycle event through to the policy enforcement decision and back. It covers the system architecture, the hook-handler dispatch mechanism, the two-tier guidance control plane, the installer workflow, and the autopilot optimization loop.
+This document explains how the guidance implementation kit works, from the moment a Claude Code or Codex agent triggers a lifecycle event through to the policy enforcement decision and back. It covers C4 architecture views, the hook-handler dispatch mechanism, the two-tier guidance control plane, the installer workflow, and the autopilot optimization loop.
 
 ---
 
-## 1. System Architecture Overview
+## 1. C4 System Context
+
+The C4 model provides a hierarchical way to describe software architecture at increasing levels of detail. This section presents three C4 views: system context (who uses the system), container (what are the deployable units), and component (what are the key internal parts).
+
+### Level 1: System Context
+
+At the highest level, the guidance implementation kit is used by two types of AI coding agents. Claude Code is Anthropic's native CLI agent with built-in hook support. Codex is OpenAI's coding agent that lacks native hooks but is supported via an explicit CLI bridge. Both agents interact with the guidance system to get policy decisions before executing tools.
+
+The guidance system depends on two external packages: `@claude-flow/guidance` (the policy engine providing compiler, retriever, gates, ledger, trust, adversarial detection, proof chains, conformance, and evolution) and `@claude-flow/hooks` (the hook registry and executor framework). Policy rules are authored by developers in `CLAUDE.md` files.
+
+![system-context---guidance-implementation-kit](diagrams/architecture/system-context---guidance-implementation-kit.svg)
+
+<details>
+<summary>Mermaid Source</summary>
+
+```mermaid
+C4Context
+    title System Context - Guidance Implementation Kit
+
+    Person(dev, "Developer", "Authors CLAUDE.md policy rules and configures guidance wiring")
+    Person(claude, "Claude Code Agent", "Anthropic's CLI coding agent with native hook system")
+    Person(codex, "Codex Agent", "OpenAI's coding agent using explicit CLI bridge")
+
+    System(guidance, "Guidance Implementation Kit", "Intercepts agent lifecycle events, enforces CLAUDE.md policy rules, records trust and proof chains")
+
+    System_Ext(cfguidance, "@claude-flow/guidance", "Policy engine: compiler, retriever, gates, ledger, trust, adversarial, proof, evolution")
+    System_Ext(cfhooks, "@claude-flow/hooks", "Hook registry and executor framework for lifecycle event processing")
+    System_Ext(cfcli, "@claude-flow/cli", "Claude Flow CLI for project initialization and hook telemetry")
+
+    Rel(dev, guidance, "Writes CLAUDE.md rules, runs cf-guidance-impl init")
+    Rel(claude, guidance, "Sends tool events via settings.json hooks")
+    Rel(codex, guidance, "Sends lifecycle events via CLI bridge")
+    Rel(guidance, cfguidance, "Compiles policy, evaluates gates, records trust and proof")
+    Rel(guidance, cfhooks, "Registers and executes hook handlers")
+    Rel(guidance, cfcli, "Optional: project init, hook telemetry")
+```
+
+</details>
+
+### Level 2: Container Diagram
+
+The kit is structured as a single npm package with several distinct containers (runtime processes and data stores):
+
+- **Hook Handler** — the CJS dispatcher that Claude Code invokes on every tool use. It is the performance-critical entry point (must start and respond within 5 seconds).
+- **Guidance Runtime** — the ESM-based control plane that compiles policy, evaluates gates, and manages trust/proof/adversarial layers. Invoked synchronously by the hook handler for blocking decisions.
+- **CLI Tools** — eight CLI binaries for analysis, autopilot, benchmarking, scaffolding, and the Codex bridge.
+- **Installer** — the `cf-guidance-impl` binary that wires hooks into target repositories.
+- **Persistent State** — JSON files in `.claude-flow/guidance/` storing trust snapshots, proof chains, autopilot state, and hook task caches.
+
+![container-diagram---guidance-implementation-kit](diagrams/architecture/container-diagram---guidance-implementation-kit.svg)
+
+<details>
+<summary>Mermaid Source</summary>
+
+```mermaid
+C4Container
+    title Container Diagram - Guidance Implementation Kit
+
+    Person(claude, "Claude Code")
+    Person(codex, "Codex")
+
+    System_Boundary(kit, "Guidance Implementation Kit") {
+        Container(handler, "Hook Handler", "Node.js CJS", "Dispatches 12 hook commands, reads stdin JSON, returns exit code 0/1")
+        Container(runtime, "Guidance Runtime", "Node.js ESM", "Phase 1 (compiler/retriever/gates/ledger) + Advanced (trust/threat/proof/conformance/evolution)")
+        Container(cli, "CLI Tools", "Node.js ESM", "8 binaries: analyze, autopilot, benchmark, integrations, codex-bridge, scaffold, runtime-demo")
+        Container(installer, "Installer", "Node.js ESM", "cf-guidance-impl init/install/verify - wires hooks into target repos")
+        ContainerDb(state, "Persistent State", "JSON files", "Trust snapshots, proof chain, autopilot state, task cache in .claude-flow/guidance/")
+        ContainerDb(policy, "Policy Files", "Markdown", "CLAUDE.md (shared) + CLAUDE.local.md (local experiments)")
+    }
+
+    System_Ext(cfguidance, "@claude-flow/guidance", "Policy engine")
+    System_Ext(cfhooks, "@claude-flow/hooks", "Hook framework")
+
+    Rel(claude, handler, "stdin JSON + argv", "PreToolUse/PostToolUse/Session hooks")
+    Rel(codex, cli, "CLI commands", "guidance-codex-bridge.js")
+    Rel(cli, handler, "spawnSync", "Delegates to hook handler")
+    Rel(handler, runtime, "spawnSync", "Blocking policy evaluation")
+    Rel(handler, state, "Reads/writes", "Task cache, session state")
+    Rel(runtime, cfguidance, "Imports", "Compiler, gates, trust, proof APIs")
+    Rel(runtime, cfhooks, "Imports", "HookRegistry, HookExecutor")
+    Rel(runtime, policy, "Reads", "Compiles rules into policy bundle")
+    Rel(runtime, state, "Persists", "Trust, proof chain, integration reports")
+    Rel(installer, handler, "Writes shim for", "3-line CJS delegator")
+    Rel(cli, runtime, "Initializes", "Advanced runtime for integrations")
+```
+
+</details>
+
+### Level 3: Component Diagram — Guidance Runtime
+
+The runtime container has two tiers. The Phase 1 runtime provides the core policy pipeline (compile, retrieve, gate, record). The Advanced runtime wraps Phase 1 and adds four security/governance layers, each with distinct responsibilities.
+
+![component-diagram---guidance-runtime](diagrams/architecture/component-diagram---guidance-runtime.svg)
+
+<details>
+<summary>Mermaid Source</summary>
+
+```mermaid
+C4Component
+    title Component Diagram - Guidance Runtime
+
+    Container_Boundary(runtime, "Guidance Runtime") {
+        Component(p1, "Phase 1 Runtime", "phase1-runtime.js", "Initializes compiler, retriever, gates, ledger, hook registry")
+        Component(compiler, "Compiler", "@claude-flow/guidance/compiler", "Parses CLAUDE.md into constitution rules + shards")
+        Component(retriever, "Retriever", "@claude-flow/guidance/retriever", "Semantic shard matching by task description")
+        Component(gates, "Gates", "@claude-flow/guidance/gates", "Rule enforcement: allow / warn / block decisions")
+        Component(ledger, "Ledger", "@claude-flow/guidance/ledger", "Append-only audit log of gate decisions")
+        Component(adv, "Advanced Runtime", "advanced-runtime.js", "Wraps Phase 1, adds trust/threat/proof/evolution")
+        Component(trust, "Trust System", "@claude-flow/guidance/trust", "Per-agent score accumulator with rate limiting")
+        Component(threat, "Threat Detector", "@claude-flow/guidance/adversarial", "Prompt injection and privilege escalation detection")
+        Component(collusion, "Collusion Detector", "@claude-flow/guidance/adversarial", "Agent interaction ring detection")
+        Component(quorum, "Memory Quorum", "@claude-flow/guidance/adversarial", "2/3 vote threshold for critical memory writes")
+        Component(proof, "Proof Chain", "@claude-flow/guidance/proof", "HMAC-SHA256 signed append-only log")
+        Component(conform, "Conformance Runner", "@claude-flow/guidance/conformance-kit", "Replay determinism verification")
+        Component(evolution, "Evolution Pipeline", "@claude-flow/guidance/evolution", "Propose, simulate, compare, stage rollouts")
+    }
+
+    ContainerDb(policy, "CLAUDE.md", "Policy files")
+    ContainerDb(state, "Persistent State", "JSON files")
+
+    Rel(p1, compiler, "Creates")
+    Rel(p1, retriever, "Loads bundle into")
+    Rel(p1, gates, "Sets active rules on")
+    Rel(p1, ledger, "Records decisions in")
+    Rel(compiler, policy, "Reads and parses")
+    Rel(adv, p1, "Wraps and delegates to")
+    Rel(adv, trust, "Records outcomes")
+    Rel(adv, threat, "Analyzes inputs")
+    Rel(adv, collusion, "Tracks interactions")
+    Rel(adv, quorum, "Manages votes")
+    Rel(adv, proof, "Appends entries")
+    Rel(adv, conform, "Runs replay tests")
+    Rel(adv, evolution, "Manages proposals")
+    Rel(adv, state, "Persists snapshots")
+    Rel(trust, state, "Saves scores")
+    Rel(proof, state, "Saves chain")
+```
+
+</details>
+
+---
+
+## 2. System Architecture Overview
 
 The guidance implementation kit sits between two AI coding agents (Claude Code and OpenAI Codex) and the `@claude-flow/guidance` control plane. Its job is to intercept every tool use, command execution, file edit, and task lifecycle event, run it through a policy engine compiled from `CLAUDE.md`, and return an allow/warn/block decision before the agent proceeds.
 
@@ -115,7 +257,7 @@ flowchart TB
 
 ---
 
-## 2. Hook-Handler Dispatch Flow
+## 3. Hook-Handler Dispatch Flow
 
 The hook-handler (`src/hook-handler.cjs`) is the central routing point for all lifecycle events. It is a CommonJS module (required by Claude Code's hook runner, which uses `node` to execute it) that reads JSON from stdin and a command name from argv, then dispatches to one of 12 handler functions.
 
@@ -240,7 +382,7 @@ flowchart LR
 
 ---
 
-## 3. Guidance Control Plane Internals
+## 4. Guidance Control Plane Internals
 
 The guidance control plane is the policy engine at the heart of this system. It has two tiers: a lightweight **Phase 1 runtime** for basic policy enforcement, and an **Advanced runtime** that layers security, trust, and governance features on top.
 
@@ -393,7 +535,7 @@ flowchart TB
 
 ---
 
-## 4. Installer Workflow
+## 5. Installer Workflow
 
 The installer (`src/installer.mjs`) provides three exported functions: `initRepo`, `installIntoRepo`, and `verifyRepo`. The CLI binary `cf-guidance-impl` exposes these as `init`, `install`, and `verify` subcommands.
 
@@ -516,7 +658,7 @@ flowchart TB
 
 ---
 
-## 5. Autopilot Optimization Loop
+## 6. Autopilot Optimization Loop
 
 The autopilot (`src/cli/guidance-autopilot.js`) implements a continuous improvement cycle for `CLAUDE.md` rules. Its purpose is to automatically promote high-performing local rules from `CLAUDE.local.md` into the shared `CLAUDE.md`, with full scoring, optional A/B benchmarking, backups, and Architecture Decision Records.
 
@@ -633,7 +775,7 @@ flowchart TB
 
 ---
 
-## 6. The Codex Bridge
+## 7. The Codex Bridge
 
 Codex lacks Claude Code's native hook system, so the kit provides `guidance-codex-bridge.js` as an explicit CLI wrapper. It supports 8 events (`pre-command`, `pre-edit`, `pre-task`, `post-edit`, `post-task`, `session-start`, `session-end`, `status`) and maps each to the corresponding hook-handler command (e.g., `pre-command` maps to `pre-bash`, `session-start` maps to `session-restore`).
 
@@ -649,7 +791,7 @@ This means Codex repos get the same blocking/allowing behavior: if `pre-command`
 
 ---
 
-## 7. Integration Suites
+## 8. Integration Suites
 
 The `guidance-integrations.js` CLI and the `integration-runners.js` module provide 6 integration test suites that exercise every layer of the Advanced runtime:
 
@@ -666,7 +808,7 @@ Running `cf-guidance all` executes all 6 suites sequentially and persists the co
 
 ---
 
-## 8. File Map
+## 9. File Map
 
 Quick reference to key source files and their roles.
 
@@ -747,7 +889,7 @@ flowchart LR
 
 ---
 
-## 9. Key Design Decisions
+## 10. Key Design Decisions
 
 **CommonJS for the hook-handler.** Claude Code executes hooks by running `node <path>`. The hook-handler must start fast (it's in the critical path of every tool use) and support `require()` for lazy-loading helper modules. CJS avoids the overhead of ESM resolution and allows synchronous `require()` calls that only load modules when needed.
 

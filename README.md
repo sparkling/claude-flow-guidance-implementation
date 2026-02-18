@@ -114,15 +114,15 @@ You can also execute scripts directly from `node_modules`:
 ```json
 {
   "scripts": {
-    "guidance:analyze": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/analyze-guidance.js",
-    "guidance:optimize": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-autopilot.js --once --apply --source manual",
-    "guidance:ab-benchmark": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-ab-benchmark.js",
-    "guidance:codex:status": "node ./node_modules/claude-flow-guidance-implementation/scaffold/scripts/guidance-codex-bridge.js status"
+    "guidance:analyze": "node ./node_modules/claude-flow-guidance-implementation/src/cli/analyze-guidance.js",
+    "guidance:optimize": "node ./node_modules/claude-flow-guidance-implementation/src/cli/guidance-autopilot.js --once --apply --source manual",
+    "guidance:ab-benchmark": "node ./node_modules/claude-flow-guidance-implementation/src/cli/guidance-ab-benchmark.js",
+    "guidance:codex:status": "node ./node_modules/claude-flow-guidance-implementation/src/cli/guidance-codex-bridge.js status"
   }
 }
 ```
 
-Project root resolution for scaffold scripts:
+Project root resolution for CLI scripts:
 
 - `GUIDANCE_PROJECT_DIR` if set
 - else `CLAUDE_PROJECT_DIR` if set

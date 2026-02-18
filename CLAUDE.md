@@ -53,7 +53,7 @@
 - Use `/tests` for test files
 - Use `/docs` for documentation and markdown files
 - Use `/config` for configuration files
-- Use `/scripts` for utility scripts
+- Use `/src/cli` for CLI entry points
 - Use `/examples` for example code
 
 ## Project Architecture
@@ -67,8 +67,8 @@
 
 ### Project Config
 
-- **Topology**: hierarchical-mesh
-- **Max Agents**: 15
+- **Topology**: hierarchical
+- **Max Agents**: 8
 - **Memory**: hybrid
 - **HNSW**: Enabled
 - **Neural**: Enabled
@@ -76,18 +76,11 @@
 ## Build & Test
 
 ```bash
-# Build
-npm run build
-
-# Test
-npm test
-
-# Lint
+# Lint / verify
 npm run lint
 ```
 
-- ALWAYS run tests after making code changes
-- ALWAYS verify build succeeds before committing
+- ALWAYS run lint after making code changes
 
 ## Security Rules
 

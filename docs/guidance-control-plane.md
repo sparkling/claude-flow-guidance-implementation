@@ -189,7 +189,7 @@ From `package.json`:
 ### What each wrapper does
 
 `guidance:analyze`
-- Runs `scripts/analyze-guidance.js`
+- Runs `src/cli/analyze-guidance.js`
 - Uses `@claude-flow/guidance/analyzer` score reporting
 - Initializes guidance control plane
 - Performs shard retrieval smoke checks
@@ -197,7 +197,7 @@ From `package.json`:
 - Writes bundle summary to `.claude-flow/guidance/bundle-summary.json`
 
 `guidance:optimize`
-- Runs `scripts/guidance-autopilot.js --once --apply --source manual`
+- Runs `src/cli/guidance-autopilot.js --once --apply --source manual`
 - Executes repo custom promotion loop (see next section)
 
 `guidance:autopilot:once`
@@ -207,12 +207,12 @@ From `package.json`:
 - Runs recurring autopilot cycles in foreground process (`--daemon --apply`)
 
 `guidance:ab-benchmark`
-- Runs `scripts/guidance-ab-benchmark.js`
+- Runs `src/cli/guidance-ab-benchmark.js`
 - Uses `abBenchmark()` with a local synthetic executor
 - Writes `.claude-flow/guidance/ab-benchmark-report.json`
 
 `guidance:all` and the module-specific `guidance:*` wrappers
-- Runs `scripts/guidance-integrations.js` (backed by `src/guidance/advanced-runtime.js`)
+- Runs `src/cli/guidance-integrations.js` (backed by `src/guidance/advanced-runtime.js`)
 - Implements executable versions of README integration modules:
   - hook wiring flow
   - trust accumulation
@@ -223,15 +223,15 @@ From `package.json`:
 - Writes advanced runtime state and proof chain to `.claude-flow/guidance/advanced/`
 
 `guidance:runtime`
-- Runs `scripts/guidance-runtime.js demo`
+- Runs `src/cli/guidance-runtime.js demo`
 - Demonstrates pre-task / pre-command / post-task flow
 
 `guidance:scaffold`
-- Runs `scripts/scaffold-guidance.js`
+- Runs `src/cli/scaffold-guidance.js`
 - Scaffolds guidance templates into `.claude-flow/guidance/scaffold/`
 
 `guidance:codex:*`
-- Runs `scripts/guidance-codex-bridge.js` lifecycle events
+- Runs `src/cli/guidance-codex-bridge.js` lifecycle events
 - Reuses `.claude/helpers/hook-handler.cjs` enforcement path
 - Optionally executes best-effort `npx @claude-flow/cli@latest hooks ...` telemetry
 
@@ -239,7 +239,7 @@ From `package.json`:
 This repo includes a custom autopilot that is not a built-in CLI command.
 
 File:
-- `scripts/guidance-autopilot.js`
+- `src/cli/guidance-autopilot.js`
 
 Behavior:
 1. Read `CLAUDE.md` and optional `CLAUDE.local.md`
@@ -282,7 +282,7 @@ Current repo autopilot promotes only rules already present in `CLAUDE.local.md` 
 ## Hook Integration and Background Automation
 Hook launcher file:
 - `.claude/helpers/hook-handler.cjs`
-- `scripts/guidance-codex-bridge.js` (Codex lifecycle dispatcher)
+- `src/cli/guidance-codex-bridge.js` (Codex lifecycle dispatcher)
 
 Claude hook configuration file:
 - `.claude/settings.json`
@@ -291,7 +291,7 @@ Claude hook configuration file:
 Key integration:
 - On `SessionEnd`, `hook-handler.cjs` launches autopilot as a detached background process.
 - This is non-blocking (`detached: true`, `stdio: ignore`, `child.unref()`).
-- Hook handler now dispatches guidance event wiring through `scripts/guidance-integrations.js event ...`:
+- Hook handler now dispatches guidance event wiring through `src/cli/guidance-integrations.js event ...`:
   - sync blocking checks for `pre-command`, `pre-edit`, `pre-task`
   - async governance updates for `post-edit`, `post-task`, `session-end`
 
@@ -339,7 +339,7 @@ There are two separate concepts:
 
 2. Repo autopilot daemon loop:
 - `npm run guidance:autopilot:daemon`
-- Runs recurring local promotion checks from `scripts/guidance-autopilot.js`
+- Runs recurring local promotion checks from `src/cli/guidance-autopilot.js`
 - Independent of whether CLI daemon is running
 
 ## Recommended Operational Flows
@@ -410,7 +410,7 @@ Autopilot reports `no-promotable-local-rules`:
 
 No background autopilot activity on session end:
 - Confirm hook wiring in `.claude/settings.json`
-- Confirm script exists at `scripts/guidance-autopilot.js`
+- Confirm script exists at `src/cli/guidance-autopilot.js`
 - Ensure `GUIDANCE_AUTOPILOT_ENABLED` is not set to `0`
 
 A/B benchmark hangs in environments without `claude -p`:
@@ -426,12 +426,12 @@ Core docs and implementation:
 - `CLAUDE.local.md`
 - `.claude/settings.json`
 - `.claude/helpers/hook-handler.cjs`
-- `scripts/analyze-guidance.js`
-- `scripts/guidance-autopilot.js`
-- `scripts/guidance-ab-benchmark.js`
-- `scripts/guidance-integrations.js`
-- `scripts/guidance-runtime.js`
-- `scripts/scaffold-guidance.js`
+- `src/cli/analyze-guidance.js`
+- `src/cli/guidance-autopilot.js`
+- `src/cli/guidance-ab-benchmark.js`
+- `src/cli/guidance-integrations.js`
+- `src/cli/guidance-runtime.js`
+- `src/cli/scaffold-guidance.js`
 - `src/guidance/phase1-runtime.js`
 - `src/guidance/advanced-runtime.js`
 - `src/guidance/content-aware-executor.js`

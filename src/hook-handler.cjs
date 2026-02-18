@@ -94,15 +94,24 @@ function getProjectDir() {
 }
 
 function getBundledScriptPath(scriptName) {
-  return path.resolve(__dirname, '..', '..', 'scripts', scriptName);
+  return path.resolve(__dirname, 'cli', scriptName);
 }
 
+const _resolvedPaths = {};
 function resolveGuidanceScriptPath(scriptName) {
-  const localPath = path.join(getProjectDir(), 'scripts', scriptName);
-  if (fs.existsSync(localPath)) return localPath;
+  if (_resolvedPaths[scriptName]) return _resolvedPaths[scriptName];
+
+  const localPath = path.join(getProjectDir(), 'src', 'cli', scriptName);
+  if (fs.existsSync(localPath)) {
+    _resolvedPaths[scriptName] = localPath;
+    return localPath;
+  }
 
   const bundledPath = getBundledScriptPath(scriptName);
-  if (fs.existsSync(bundledPath)) return bundledPath;
+  if (fs.existsSync(bundledPath)) {
+    _resolvedPaths[scriptName] = bundledPath;
+    return bundledPath;
+  }
 
   return localPath;
 }
@@ -147,8 +156,11 @@ function stableId(prefix, seed) {
   return `${prefix}-${digest}`;
 }
 
+let _toolInput;
 function getToolInput() {
-  return (stdinData && typeof stdinData.tool_input === 'object' && stdinData.tool_input) || {};
+  if (_toolInput !== undefined) return _toolInput;
+  _toolInput = (stdinData && typeof stdinData.tool_input === 'object' && stdinData.tool_input) || {};
+  return _toolInput;
 }
 
 function getTaskDescription() {
@@ -349,7 +361,7 @@ const handlers = {
     }
     if (router && router.routeTask) {
       const result = router.routeTask(prompt);
-      var output = [];
+      const output = [];
       output.push('[INFO] Routing task: ' + (prompt.substring(0, 80) || '(no prompt)'));
       output.push('');
       output.push('+------------------- Primary Recommendation -------------------+');
@@ -378,9 +390,9 @@ const handlers = {
       process.exit(1);
     }
 
-    var cmd = commandText.toLowerCase();
-    var dangerous = ['rm -rf /', 'format c:', 'del /s /q c:\\', ':(){:|:&};:'];
-    for (var i = 0; i < dangerous.length; i++) {
+    const cmd = commandText.toLowerCase();
+    const dangerous = ['rm -rf /', 'format c:', 'del /s /q c:\\', ':(){:|:&};:'];
+    for (let i = 0; i < dangerous.length; i++) {
       if (cmd.includes(dangerous[i])) {
         console.error('[BLOCKED] Dangerous command detected: ' + dangerous[i]);
         process.exit(1);
@@ -421,7 +433,7 @@ const handlers = {
     }
     if (intelligence && intelligence.recordEdit) {
       try {
-        var file = (stdinData.tool_input && stdinData.tool_input.file_path) || args[0] || '';
+        const file = (stdinData.tool_input && stdinData.tool_input.file_path) || args[0] || '';
         intelligence.recordEdit(file);
       } catch (e) { /* non-fatal */ }
     }
@@ -439,7 +451,7 @@ const handlers = {
 
   'session-restore': () => {
     if (session) {
-      var existing = session.restore && session.restore();
+      const existing = session.restore && session.restore();
       if (!existing) {
         session.start && session.start();
       }
@@ -448,7 +460,7 @@ const handlers = {
     }
     if (intelligence && intelligence.init) {
       try {
-        var result = intelligence.init();
+        const result = intelligence.init();
         if (result && result.nodes > 0) {
           console.log('[INTELLIGENCE] Loaded ' + result.nodes + ' patterns, ' + result.edges + ' edges');
         }
@@ -459,9 +471,9 @@ const handlers = {
   'session-end': () => {
     if (intelligence && intelligence.consolidate) {
       try {
-        var result = intelligence.consolidate();
+        const result = intelligence.consolidate();
         if (result && result.entries > 0) {
-          var msg = '[INTELLIGENCE] Consolidated: ' + result.entries + ' entries, ' + result.edges + ' edges';
+          let msg = '[INTELLIGENCE] Consolidated: ' + result.entries + ' entries, ' + result.edges + ' edges';
           if (result.newEntries > 0) msg += ', ' + result.newEntries + ' new';
           msg += ', PageRank recomputed';
           console.log(msg);
@@ -507,7 +519,7 @@ const handlers = {
     }
     const routePrompt = taskDescription || prompt;
     if (router && router.routeTask && routePrompt) {
-      var result = router.routeTask(routePrompt);
+      const result = router.routeTask(routePrompt);
       console.log('[INFO] Task routed to: ' + result.agent + ' (confidence: ' + result.confidence + ')');
     } else {
       console.log('[OK] Task started');

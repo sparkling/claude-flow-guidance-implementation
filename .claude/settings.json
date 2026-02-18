@@ -10,6 +10,26 @@
             "timeout": 5000
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/hook-handler.cjs pre-edit",
+            "timeout": 5000
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/hook-handler.cjs pre-task",
+            "timeout": 5000
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -20,6 +40,16 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/hook-handler.cjs post-edit",
             "timeout": 10000
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/hook-handler.cjs post-task",
+            "timeout": 5000
           }
         ]
       }

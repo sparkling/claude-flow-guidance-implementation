@@ -4,6 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { safeString, parseJson } from '../utils.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
@@ -33,7 +35,7 @@ const HOOK_HANDLER_MAP = {
 
 function usage() {
   console.log(`Usage:
-  node scripts/guidance-codex-bridge.js <event> [options]
+  node src/cli/guidance-codex-bridge.js <event> [options]
 
 Events:
   pre-command   --command "<bash command>"
@@ -53,9 +55,9 @@ Common options:
   --skip-cf-hooks
 
 Examples:
-  node scripts/guidance-codex-bridge.js pre-task --description "Implement auth middleware"
-  node scripts/guidance-codex-bridge.js pre-command --command "git push --force origin main"
-  node scripts/guidance-codex-bridge.js post-task --task-id task-123 --status completed`);
+  node src/cli/guidance-codex-bridge.js pre-task --description "Implement auth middleware"
+  node src/cli/guidance-codex-bridge.js pre-command --command "git push --force origin main"
+  node src/cli/guidance-codex-bridge.js post-task --task-id task-123 --status completed`);
 }
 
 function parseArgs(argv) {
@@ -84,25 +86,10 @@ function parseArgs(argv) {
   return { positional, options, flags };
 }
 
-function safeString(value, fallback = '') {
-  if (value == null) return fallback;
-  return String(value);
-}
-
 function toInteger(value, fallback = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return fallback;
   return Math.round(parsed);
-}
-
-function parseJson(value, fallback = {}) {
-  if (!value) return fallback;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
 }
 
 function parseArray(value) {

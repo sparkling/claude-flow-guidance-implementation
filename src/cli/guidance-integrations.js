@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createGuidanceAdvancedRuntime } from '../guidance/advanced-runtime.js';
+import { safeString, safeArray, readJson, parseJson } from '../utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(
@@ -12,52 +13,24 @@ const rootDir = resolve(
 
 function usage() {
   console.log(`Usage:
-  node scripts/guidance-integrations.js status
-  node scripts/guidance-integrations.js hooks [taskDescription]
-  node scripts/guidance-integrations.js trust
-  node scripts/guidance-integrations.js adversarial
-  node scripts/guidance-integrations.js proof
-  node scripts/guidance-integrations.js conformance
-  node scripts/guidance-integrations.js evolution
-  node scripts/guidance-integrations.js all
-  node scripts/guidance-integrations.js event <pre-command|pre-edit|pre-task|post-task|post-edit|session-end> [jsonPayload]`);
+  node src/cli/guidance-integrations.js status
+  node src/cli/guidance-integrations.js hooks [taskDescription]
+  node src/cli/guidance-integrations.js trust
+  node src/cli/guidance-integrations.js adversarial
+  node src/cli/guidance-integrations.js proof
+  node src/cli/guidance-integrations.js conformance
+  node src/cli/guidance-integrations.js evolution
+  node src/cli/guidance-integrations.js all
+  node src/cli/guidance-integrations.js event <pre-command|pre-edit|pre-task|post-task|post-edit|session-end> [jsonPayload]`);
 }
 
 function printJson(value) {
   console.log(JSON.stringify(value, null, 2));
 }
 
-function readJson(path, fallback = {}) {
-  if (!existsSync(path)) return fallback;
-  try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return fallback;
-  }
-}
-
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(value, null, 2));
-}
-
-function parsePayload(input) {
-  if (!input) return {};
-  try {
-    const parsed = JSON.parse(input);
-    return typeof parsed === 'object' && parsed != null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function safeArray(input) {
-  return Array.isArray(input) ? input : [];
-}
-
-function safeString(input, fallback = '') {
-  if (input == null) return fallback;
-  return String(input);
 }
 
 function sanitizeDiffLines(input) {
@@ -570,7 +543,7 @@ async function main() {
         usage();
         process.exit(1);
       }
-      const payload = parsePayload(args[1]);
+      const payload = parseJson(args[1]);
       const result = await runEvent(runtime, eventName, payload);
       printJson(result);
       return;

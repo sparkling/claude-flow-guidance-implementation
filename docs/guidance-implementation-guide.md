@@ -51,7 +51,7 @@ The post language maps to concrete components as follows:
 |---|---|
 | "CLAUDE.md compiled into typed constitution + shards" | `createCompiler()` + `createRetriever()` in `src/guidance/phase1-runtime.js` |
 | "CLAUDE.local.md overlays private context" | `compiler.compile(root, local)` in phase-1 runtime and autopilot |
-| "Local wins can be promoted with ADR" | `scripts/guidance-autopilot.js` promotion flow + ADR generation in `docs/adr/` |
+| "Local wins can be promoted with ADR" | `src/cli/guidance-autopilot.js` promotion flow + ADR generation in `docs/adr/` |
 | "Rules enforced, loops reduce" | pre-event gates + runtime gating in hook wiring |
 | "Replayable/auditable decisions" | proof chain + advanced state in `.claude-flow/guidance/advanced/` |
 
@@ -67,12 +67,12 @@ This repo now has manual command-bridge wiring from Claude hooks into guidance r
 |---|---|---|
 | Phase-1 runtime (compiler/retriever/gates/ledger/hooks provider) | `src/guidance/phase1-runtime.js` | Implemented |
 | Advanced runtime (trust/adversarial/proof/conformance/evolution) | `src/guidance/advanced-runtime.js` | Implemented |
-| Event bridge entrypoint | `scripts/guidance-integrations.js` | Implemented |
+| Event bridge entrypoint | `src/cli/guidance-integrations.js` | Implemented |
 | Hook bridge and event dispatch | `.claude/helpers/hook-handler.cjs` | Implemented |
-| Codex lifecycle bridge | `scripts/guidance-codex-bridge.js` | Implemented |
+| Codex lifecycle bridge | `src/cli/guidance-codex-bridge.js` | Implemented |
 | Claude hook config | `.claude/settings.json` | Wired |
 | Codex lifecycle command map | `.agents/config.toml`, `AGENTS.md` | Wired |
-| Analysis / benchmark / autopilot scripts | `scripts/analyze-guidance.js`, `scripts/guidance-ab-benchmark.js`, `scripts/guidance-autopilot.js` | Implemented |
+| Analysis / benchmark / autopilot scripts | `src/cli/analyze-guidance.js`, `src/cli/guidance-ab-benchmark.js`, `src/cli/guidance-autopilot.js` | Implemented |
 | Implementation docs | `docs/guidance-control-plane.md`, this document | Updated |
 
 ---
@@ -83,16 +83,16 @@ Execution chain:
 
 1. Claude hook triggers command in `.claude/settings.json`
 2. `.claude/helpers/hook-handler.cjs` parses hook payload
-3. Hook handler calls `node scripts/guidance-integrations.js event <event> <json>`
-4. `scripts/guidance-integrations.js` runs phase-1/advanced logic
+3. Hook handler calls `node src/cli/guidance-integrations.js event <event> <json>`
+4. `src/cli/guidance-integrations.js` runs phase-1/advanced logic
 5. Pre-events can block, post-events persist governance state
 
 This is used because Claude Code hooks here are command-based, not direct in-process `HookRegistry` injection.
 
 Codex path in this repo:
-1. Run lifecycle command via `scripts/guidance-codex-bridge.js`
+1. Run lifecycle command via `src/cli/guidance-codex-bridge.js`
 2. Bridge forwards to `.claude/helpers/hook-handler.cjs` with normalized payload
-3. Hook handler dispatches into `scripts/guidance-integrations.js event ...`
+3. Hook handler dispatches into `src/cli/guidance-integrations.js event ...`
 4. Optional best-effort `npx @claude-flow/cli@latest hooks ...` telemetry runs
 
 ## Event mapping
@@ -308,8 +308,8 @@ npx claude-flow guidance --help
 4. Verify repo wiring files exist and are referenced.
 - `.claude/settings.json`
 - `.claude/helpers/hook-handler.cjs`
-- `scripts/guidance-integrations.js`
-- `scripts/guidance-codex-bridge.js`
+- `src/cli/guidance-integrations.js`
+- `src/cli/guidance-codex-bridge.js`
 
 5. Run baseline checks.
 ```bash
@@ -374,7 +374,7 @@ It does not guarantee your repo-specific guidance bridge scripts are wired exact
 This repo's authoritative wiring is the combination of:
 - `.claude/settings.json` hook commands
 - `.claude/helpers/hook-handler.cjs` bridge logic
-- `scripts/guidance-integrations.js event ...` handlers
+- `src/cli/guidance-integrations.js event ...` handlers
 
 ---
 
@@ -408,11 +408,11 @@ Yes in this repo. Guidance event wiring is enabled and session-end autopilot lau
 Repository implementation:
 - `src/guidance/phase1-runtime.js`
 - `src/guidance/advanced-runtime.js`
-- `scripts/guidance-integrations.js`
-- `scripts/guidance-runtime.js`
-- `scripts/guidance-autopilot.js`
-- `scripts/guidance-ab-benchmark.js`
-- `scripts/analyze-guidance.js`
+- `src/cli/guidance-integrations.js`
+- `src/cli/guidance-runtime.js`
+- `src/cli/guidance-autopilot.js`
+- `src/cli/guidance-ab-benchmark.js`
+- `src/cli/analyze-guidance.js`
 - `.claude/helpers/hook-handler.cjs`
 - `.claude/settings.json`
 - `package.json`

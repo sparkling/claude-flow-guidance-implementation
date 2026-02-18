@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve, relative } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
@@ -8,6 +8,7 @@ import {
   GUIDANCE_PACKAGE_DEPS,
   GUIDANCE_PACKAGE_SCRIPTS,
 } from './default-settings.mjs';
+import { readJson } from './utils.mjs';
 
 const COMPAT_MODULES = ['router', 'session', 'memory', 'statusline'];
 
@@ -43,7 +44,7 @@ const GUIDANCE_CODEX_CONFIG_BLOCK = [
   '',
   '[guidance_codex]',
   'enabled = true',
-  'script = "scripts/guidance-codex-bridge.js"',
+  'script = "src/cli/guidance-codex-bridge.js"',
   'hook_handler = ".claude/helpers/hook-handler.cjs"',
   'run_claude_flow_cli_hooks = true',
   '',
@@ -65,7 +66,7 @@ const GUIDANCE_CODEX_AGENTS_BLOCK = [
   'Codex does not expose Claude Code-style event-command hook maps in `config.toml`.',
   'This project uses an explicit bridge script:',
   '',
-  '- `scripts/guidance-codex-bridge.js` -> dispatches lifecycle events to:',
+  '- `src/cli/guidance-codex-bridge.js` -> dispatches lifecycle events to:',
   '  - `.claude/helpers/hook-handler.cjs` (enforcement path)',
   '  - optional `npx @claude-flow/cli@latest hooks ...` telemetry calls',
   '',
@@ -105,15 +106,6 @@ function usesClaudeMode(mode) {
 
 function usesCodexMode(mode) {
   return mode === 'both' || mode === 'codex';
-}
-
-function readJson(path, fallback = {}) {
-  if (!existsSync(path)) return fallback;
-  try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return fallback;
-  }
 }
 
 function writeJson(path, value) {
@@ -165,10 +157,11 @@ function writeMissingStub(filePath, content) {
   if (!existsSync(filePath)) writeText(filePath, content);
 }
 
-function run(cmd, args, cwd) {
+function run(cmd, args, cwd, timeout = 30000) {
   return spawnSync(cmd, args, {
     cwd,
     encoding: 'utf-8',
+    timeout,
   });
 }
 

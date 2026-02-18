@@ -175,10 +175,29 @@
 <body>
   <div class="container">
     <h1 id="architecture-claude-flow-guidance-implementation">Architecture: claude-flow-guidance-implementation</h1>
-<p>This document provides a visual guide to the system architecture, data flows, and key processes.</p>
+<p>This document explains how the guidance implementation kit works, from the moment a Claude Code or Codex agent triggers a lifecycle event through to the policy enforcement decision and back. It covers the system architecture, the hook-handler dispatch mechanism, the two-tier guidance control plane, the installer workflow, and the autopilot optimization loop.</p>
 <hr>
 <h2 id="1-system-architecture-overview">1. System Architecture Overview</h2>
-<p>How Claude Code and Codex lifecycle events flow through the hook-handler to the guidance control plane.</p>
+<p>The guidance implementation kit sits between two AI coding agents (Claude Code and OpenAI Codex) and the <code>@claude-flow/guidance</code> control plane. Its job is to intercept every tool use, command execution, file edit, and task lifecycle event, run it through a policy engine compiled from <code>CLAUDE.md</code>, and return an allow/warn/block decision before the agent proceeds.</p>
+<h3 id="how-events-flow">How Events Flow</h3>
+<p><strong>Claude Code</strong> exposes a native hook system via <code>.claude/settings.json</code>. When Claude Code is about to execute a tool (Write, Edit, Bash, Task), it fires a <code>PreToolUse</code> event. The settings file maps each tool pattern to a shell command that runs <code>hook-handler.cjs</code> with the appropriate subcommand. Claude Code passes the tool input as JSON on stdin. The hook-handler reads this JSON, extracts the relevant fields (command text, file path, task description), and decides whether to allow or block by its exit code: <code>exit 0</code> allows the operation, <code>exit 1</code> blocks it.</p>
+<p><strong>Codex</strong> does not have native event hooks. Instead, the kit provides <code>guidance-codex-bridge.js</code>, a CLI wrapper that Codex can invoke at each lifecycle point. The bridge constructs the same stdin JSON format that Claude Code provides, spawns the hook-handler as a child process, and forwards the exit code. This gives Codex repos identical policy enforcement without requiring Claude Code&#39;s hook system.</p>
+<h3 id="the-three-layers">The Three Layers</h3>
+<ol>
+<li><p><strong>Event Capture Layer</strong> — <code>.claude/settings.json</code> (Claude Code) and <code>guidance-codex-bridge.js</code> (Codex) capture lifecycle events and normalize them into a common format.</p>
+</li>
+<li><p><strong>Hook Dispatcher</strong> — <code>hook-handler.cjs</code> is a CommonJS module that receives the normalized event, dispatches it to the appropriate handler function, and optionally delegates to helper modules (router, session, intelligence) for task routing, session state tracking, and pattern learning.</p>
+</li>
+<li><p><strong>Guidance Control Plane</strong> — The Phase 1 runtime compiles <code>CLAUDE.md</code> into a policy bundle (constitution rules + shards), retrieves relevant shards for the current operation, evaluates them through gates, and records decisions in a ledger. The Advanced runtime layers on trust scoring, adversarial threat detection, cryptographic proof chains, conformance testing, and rule evolution.</p>
+</li>
+</ol>
+<h3 id="policy-sources">Policy Sources</h3>
+<p>All policy rules originate from two Markdown files:</p>
+<ul>
+<li><strong><code>CLAUDE.md</code></strong> — shared rules checked into the repository, visible to all contributors</li>
+<li><strong><code>CLAUDE.local.md</code></strong> — local-only experiments (gitignored), used for testing rule changes before promotion</li>
+</ul>
+<p>The compiler parses these files into structured rule objects with properties like risk class, priority, intents, domains, and tool classes.</p>
 <a href="diagrams/architecture/system-architecture-overview.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/system-architecture-overview.svg" alt="system-architecture-overview"></a>
 <details>
 <summary>Mermaid Source</summary>
@@ -261,7 +280,43 @@ flowchart TB
 
 <hr>
 <h2 id="2-hook-handler-dispatch-flow">2. Hook-Handler Dispatch Flow</h2>
-<p>All 12 commands supported by <code>hook-handler.cjs</code> and their routing paths.</p>
+<p>The hook-handler (<code>src/hook-handler.cjs</code>) is the central routing point for all lifecycle events. It is a CommonJS module (required by Claude Code&#39;s hook runner, which uses <code>node</code> to execute it) that reads JSON from stdin and a command name from argv, then dispatches to one of 12 handler functions.</p>
+<h3 id="command-categories">Command Categories</h3>
+<p>The 12 commands fall into four categories based on their behavior:</p>
+<p><strong>Synchronous — Can Block (exit 1)</strong></p>
+<p>These three commands run before the agent acts. If guidance policy or safety patterns reject the operation, the handler calls <code>process.exit(1)</code> and Claude Code aborts the tool call.</p>
+<ul>
+<li><p><strong><code>pre-bash</code></strong> — Runs before every Bash command. First, it sends the command text to the guidance control plane&#39;s <code>pre-command</code> event, which evaluates it against compiled policy rules. If the control plane returns <code>blocked: true</code>, the command is rejected. As a second layer, the handler checks the command against four hardcoded dangerous patterns (<code>rm -rf /</code>, <code>format c:</code>, <code>del /s /q c:\</code>, and fork bombs). Either check can block the command.</p>
+</li>
+<li><p><strong><code>pre-edit</code></strong> — Runs before every Write, Edit, or MultiEdit tool call. Sends the file path, content, diff line count, and operation type to the guidance control plane&#39;s <code>pre-edit</code> event. The gates evaluate whether the edit violates any policy rules (e.g., editing protected files, writing secrets).</p>
+</li>
+<li><p><strong><code>pre-task</code></strong> — Runs before every Task tool call (agent spawning). Sends the task description to the guidance control plane and also to the local router module for agent recommendation. The handler remembers the task ID and description in a file cache (<code>hook-task-cache.json</code>) so that the matching <code>post-task</code> can correlate the completion.</p>
+</li>
+</ul>
+<p><strong>Asynchronous — Fire and Forget</strong></p>
+<p>These commands run after the agent has already acted. They spawn detached child processes and return immediately so they don&#39;t slow down the agent.</p>
+<ul>
+<li><p><strong><code>post-edit</code></strong> — Records an edit metric in the session state and sends an intelligence feedback signal. Launches the guidance <code>post-edit</code> event asynchronously.</p>
+</li>
+<li><p><strong><code>post-task</code></strong> — Records task completion. Retrieves the remembered task context from the cache, sends the <code>post-task</code> event to guidance asynchronously, and provides intelligence feedback.</p>
+</li>
+<li><p><strong><code>session-end</code></strong> — Consolidates the intelligence module&#39;s learned patterns (PageRank recomputation over the pattern graph), ends the session, launches the guidance <code>session-end</code> event, and fires the autopilot optimizer as a detached background process.</p>
+</li>
+</ul>
+<p><strong>Session Management</strong></p>
+<ul>
+<li><strong><code>session-restore</code></strong> — Called at <code>SessionStart</code>. Restores or starts a session via the session helper. Initializes the intelligence module, loading patterns and edges from the pattern graph. Reports the loaded pattern count.</li>
+</ul>
+<p><strong>Informational (No Side Effects)</strong></p>
+<ul>
+<li><strong><code>route</code></strong> — Returns an agent recommendation for a given task prompt without blocking anything. Uses the router module&#39;s keyword matching and confidence scoring.</li>
+<li><strong><code>compact-manual</code></strong> / <strong><code>compact-auto</code></strong> — Print guidance context reminders before Claude Code&#39;s context compaction. These ensure the agent retains awareness of CLAUDE.md rules after its context window is compressed.</li>
+<li><strong><code>status</code></strong> — Health check (always returns OK).</li>
+<li><strong><code>stats</code></strong> — Prints intelligence module metrics (pattern counts, learning stats).</li>
+</ul>
+<h3 id="the-guidance-event-protocol">The Guidance Event Protocol</h3>
+<p>For the three blocking commands, the handler uses <code>spawnSync</code> to call <code>guidance-integrations.js event &lt;eventName&gt; &lt;jsonPayload&gt;</code>. This synchronous call ensures the hook-handler waits for the policy decision before returning its exit code. The guidance integrations script initializes the Advanced runtime, runs the appropriate Phase 1 gate, performs threat detection (for <code>pre-command</code>), records trust outcomes, appends a proof chain entry, and returns a JSON result with <code>blocked: true/false</code>.</p>
+<p>For async commands, the handler uses <code>spawn</code> with <code>detached: true</code> and <code>stdio: &#39;ignore&#39;</code>, then calls <code>child.unref()</code> so the child process outlives the handler.</p>
 <a href="diagrams/architecture/hook-handler-dispatch-flow.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/hook-handler-dispatch-flow.svg" alt="hook-handler-dispatch-flow"></a>
 <details>
 <summary>Mermaid Source</summary>
@@ -340,7 +395,47 @@ flowchart LR
 
 <hr>
 <h2 id="3-guidance-control-plane-internals">3. Guidance Control Plane Internals</h2>
-<p>The two-tier runtime: Phase 1 (lightweight policy enforcement) and Advanced (trust, adversarial, proof chain).</p>
+<p>The guidance control plane is the policy engine at the heart of this system. It has two tiers: a lightweight <strong>Phase 1 runtime</strong> for basic policy enforcement, and an <strong>Advanced runtime</strong> that layers security, trust, and governance features on top.</p>
+<h3 id="phase-1-runtime-phase1-runtimejs">Phase 1 Runtime (<code>phase1-runtime.js</code>)</h3>
+<p>The Phase 1 runtime uses four core components from the <code>@claude-flow/guidance</code> package:</p>
+<ol>
+<li><p><strong>Compiler</strong> — Takes the raw text of <code>CLAUDE.md</code> and optionally <code>CLAUDE.local.md</code>, parses them into structured rules, and produces a <strong>policy bundle</strong>. The bundle contains two parts:</p>
+<ul>
+<li>A <strong>constitution</strong> — the set of high-level rules (e.g., &quot;NEVER commit secrets&quot;, &quot;ALWAYS run lint after changes&quot;) with a content hash for integrity checking.</li>
+<li><strong>Shards</strong> — individual rule objects with metadata: <code>id</code>, <code>text</code>, <code>riskClass</code> (low/medium/high/critical), <code>priority</code> (numeric), <code>intents</code> (e.g., #implementation, #security), <code>domains</code> (e.g., @engineering), and <code>toolClasses</code> (e.g., [bash], [edit]).</li>
+</ul>
+</li>
+<li><p><strong>Retriever</strong> — Given a task description, performs semantic shard matching to find the most relevant policy rules. For example, a task description mentioning &quot;authentication&quot; would retrieve shards tagged with #security or @auth domains. The retriever returns matched shards with similarity scores.</p>
+</li>
+<li><p><strong>Gates</strong> — The enforcement engine. Gates evaluate the retrieved rules against the current operation and produce an <strong>allow</strong>, <strong>warn</strong>, or <strong>block</strong> decision. A gate decision includes messages (human-readable explanations) and warnings. If any gate blocks, the overall result is <code>aborted: true</code>.</p>
+</li>
+<li><p><strong>Ledger</strong> — An append-only audit log of every gate decision. Records the task ID, the rules evaluated, the decision, and a timestamp. Used for conformance testing and debugging.</p>
+</li>
+</ol>
+<p>Additionally, the Phase 1 runtime uses the <code>@claude-flow/hooks</code> package to register hook handlers into a <strong>Hook Registry</strong> and execute them through a <strong>Hook Executor</strong>. The <code>createGuidanceHooks()</code> function wires the gates, retriever, and ledger into the hook lifecycle so that every <code>PreTask</code>, <code>PreCommand</code>, <code>PreEdit</code>, and <code>PostTask</code> event automatically goes through the compile-retrieve-gate-record pipeline.</p>
+<h3 id="advanced-runtime-advanced-runtimejs">Advanced Runtime (<code>advanced-runtime.js</code>)</h3>
+<p>The Advanced runtime wraps the Phase 1 runtime and adds four security/governance layers:</p>
+<p><strong>Trust Layer</strong></p>
+<p>The trust system maintains a per-agent score that changes based on gate outcomes. Every allow, warn, or deny decision adjusts the agent&#39;s trust score through an accumulator. The trust ledger records the full history of outcomes per agent. Trust scores affect rate limiting — agents with lower trust get stricter rate limits (e.g., a trust score of 0.5 might halve the allowed operations per minute). Trust snapshots are persisted to disk between sessions.</p>
+<p><strong>Adversarial Layer</strong></p>
+<p>Three detectors work together to identify malicious or compromised agent behavior:</p>
+<ul>
+<li><p><strong>Threat Detector</strong> — Analyzes command inputs for prompt injection patterns (e.g., &quot;ignore all previous instructions&quot;) and memory write operations for privilege escalation attempts (e.g., writing <code>admin=true</code> to a <code>user-role</code> key). Returns threat signals with severity scores.</p>
+</li>
+<li><p><strong>Collusion Detector</strong> — Tracks interaction patterns between agents. If three or more agents form a communication ring with frequency above a threshold (<code>ringMinLength: 3</code>, <code>frequencyThreshold: 5</code>), it flags potential collusion. This catches scenarios where compromised agents coordinate to bypass policy.</p>
+</li>
+<li><p><strong>Memory Quorum</strong> — Requires a 2/3 vote from validator agents before critical memory writes are accepted. A proposer submits a write, validators vote, and the quorum resolves when the threshold is met. This prevents a single compromised agent from corrupting shared state.</p>
+</li>
+</ul>
+<p><strong>Proof Layer</strong></p>
+<p>An HMAC-SHA256 signed, append-only proof chain records every significant operation. Each entry (envelope) contains: the event details, tool call records, memory operations, the agent ID, violations detected, and the previous entry&#39;s hash (forming a chain). The chain can be exported, imported, and verified end-to-end. Tampering with any entry invalidates the chain from that point forward. The signing key is configured via <code>GUIDANCE_PROOF_KEY</code> (falls back to an insecure dev key with a warning).</p>
+<p><strong>Quality Layer</strong></p>
+<ul>
+<li><p><strong>Conformance Runner</strong> — Replays a sequence of operations through the policy engine and verifies that the decisions are deterministic. If replaying the same trace produces different results, it flags a conformance failure. This catches non-determinism in the policy evaluation pipeline.</p>
+</li>
+<li><p><strong>Evolution Pipeline</strong> — Manages the lifecycle of policy changes. A proposed rule change goes through: propose (create the change), simulate (replay golden traces with the candidate config), compare (check if metrics improve), and stage (graduated rollout with configurable stages). Each stage monitors divergence and success rates before advancing.</p>
+</li>
+</ul>
 <a href="diagrams/architecture/guidance-control-plane-internals.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/guidance-control-plane-internals.svg" alt="guidance-control-plane-internals"></a>
 <details>
 <summary>Mermaid Source</summary>
@@ -444,7 +539,44 @@ flowchart TB
 
 <hr>
 <h2 id="4-installer-workflow">4. Installer Workflow</h2>
-<p>What <code>cf-guidance-impl init</code> does when wiring guidance into a target repository.</p>
+<p>The installer (<code>src/installer.mjs</code>) provides three exported functions: <code>initRepo</code>, <code>installIntoRepo</code>, and <code>verifyRepo</code>. The CLI binary <code>cf-guidance-impl</code> exposes these as <code>init</code>, <code>install</code>, and <code>verify</code> subcommands.</p>
+<h3 id="what-cf-guidance-impl-init-does">What <code>cf-guidance-impl init</code> Does</h3>
+<p>The <code>init</code> command performs a complete setup of guidance wiring in a target repository. It runs in three phases:</p>
+<p><strong>Phase 1: Claude Flow Initialization (optional)</strong></p>
+<p>Unless <code>--skip-cf-init</code> is passed, the installer runs <code>npx @claude-flow/cli init</code> in the target repo. The <code>--dual</code> flag (default for <code>both</code> mode) initializes both Claude Code and Codex support. This sets up the base Claude Flow configuration files.</p>
+<p><strong>Phase 2: Guidance Wiring (<code>installIntoRepo</code>)</strong></p>
+<p>This is the core of the installer. It performs six operations:</p>
+<ol>
+<li><p><strong>Write hook-handler shim</strong> — Creates <code>.claude/helpers/hook-handler.cjs</code> in the target repo. This is a 3-line file that sets <code>__GUIDANCE_HELPERS_DIR</code> to the local helpers directory and then <code>require()</code>s the full hook-handler from the npm package. This indirection lets Claude Code&#39;s settings reference a local file path while the actual logic lives in <code>node_modules</code>.</p>
+</li>
+<li><p><strong>Ensure <code>.cjs</code>/<code>.js</code> compatibility pairs</strong> — The hook-handler uses <code>require()</code> (CommonJS), but some helper modules may only exist as <code>.js</code> or <code>.cjs</code>. The installer checks four modules (<code>router</code>, <code>session</code>, <code>memory</code>, <code>statusline</code>) and copies whichever extension exists to create the missing counterpart.</p>
+</li>
+<li><p><strong>Merge <code>.claude/settings.json</code></strong> — For Claude Code mode, the installer merges hook definitions into the settings file. It registers four event types:</p>
+<ul>
+<li><code>PreToolUse</code> with matchers for <code>Write|Edit|MultiEdit</code> (runs <code>pre-edit</code>), <code>Bash</code> (runs <code>pre-bash</code>), and <code>Task</code> (runs <code>pre-task</code>)</li>
+<li><code>PostToolUse</code> with matchers for <code>Write|Edit|MultiEdit</code> (runs <code>post-edit</code>) and <code>Task</code> (runs <code>post-task</code>)</li>
+<li><code>SessionStart</code> (runs <code>session-restore</code>)</li>
+<li><code>SessionEnd</code> (runs <code>session-end</code>)</li>
+</ul>
+<p>It also merges environment variables: <code>CLAUDE_FLOW_HOOKS_ENABLED=true</code>, <code>GUIDANCE_EVENT_WIRING_ENABLED=1</code>, <code>GUIDANCE_EVENT_SYNC_TIMEOUT_MS=8000</code>, <code>GUIDANCE_EVENT_FAIL_CLOSED=0</code>.</p>
+<p>The merge is non-destructive: existing hooks and env vars are preserved, new ones are added alongside.</p>
+</li>
+<li><p><strong>Append Codex config</strong> — For Codex mode, appends a <code>[guidance_codex]</code> block to <code>.agents/config.toml</code> and a documentation section to <code>AGENTS.md</code> explaining the bridge commands.</p>
+</li>
+<li><p><strong>Merge <code>package.json</code></strong> — Adds 20+ <code>guidance:*</code> npm scripts (analyze, optimize, autopilot, benchmark, scaffold, and all Codex bridge commands) and the <code>claude-flow-guidance-implementation</code> dependency.</p>
+</li>
+<li><p><strong>Create <code>CLAUDE.local.md</code></strong> — Writes a stub file with an example local rule and adds it to <code>.gitignore</code>.</p>
+</li>
+</ol>
+<p><strong>Phase 3: Verification (optional)</strong></p>
+<p>Unless <code>--no-verify</code> is passed, the installer runs <code>verifyRepo</code> which performs four checks:</p>
+<ul>
+<li><strong>File existence</strong> — All required files exist (hook-handler shim, package.json, settings.json, config.toml as applicable)</li>
+<li><strong>Syntax check</strong> — <code>node --check</code> passes on the hook-handler shim</li>
+<li><strong>Smoke test</strong> — Pipes a sample JSON payload (<code>{&quot;tool_input&quot;:{&quot;command&quot;:&quot;git status&quot;}}</code>) to the hook-handler and verifies exit code 0</li>
+<li><strong>Compatibility pairs</strong> — Every helper module that has a <code>.cjs</code> also has a <code>.js</code> (and vice versa)</li>
+</ul>
+<p>If any check fails, the installer throws an error with details.</p>
 <a href="diagrams/architecture/installer-workflow.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/installer-workflow.svg" alt="installer-workflow"></a>
 <details>
 <summary>Mermaid Source</summary>
@@ -519,7 +651,38 @@ flowchart TB
 
 <hr>
 <h2 id="5-autopilot-optimization-loop">5. Autopilot Optimization Loop</h2>
-<p>How <code>guidance-autopilot.js</code> continuously promotes high-impact local rules into shared <code>CLAUDE.md</code>.</p>
+<p>The autopilot (<code>src/cli/guidance-autopilot.js</code>) implements a continuous improvement cycle for <code>CLAUDE.md</code> rules. Its purpose is to automatically promote high-performing local rules from <code>CLAUDE.local.md</code> into the shared <code>CLAUDE.md</code>, with full scoring, optional A/B benchmarking, backups, and Architecture Decision Records.</p>
+<h3 id="how-it-works">How It Works</h3>
+<p>The autopilot can run in two modes:</p>
+<ul>
+<li><strong><code>--once</code></strong> — Run a single optimization cycle and exit</li>
+<li><strong><code>--daemon</code></strong> — Run continuously, repeating every 30 minutes (configurable via <code>--interval-ms</code>)</li>
+</ul>
+<p>It is also triggered automatically by the <code>session-end</code> hook handler, which spawns it as a detached background process.</p>
+<h3 id="the-optimization-cycle">The Optimization Cycle</h3>
+<p>Each cycle proceeds through these steps:</p>
+<ol>
+<li><p><strong>Acquire lock</strong> — A PID-based file lock (<code>autopilot.lock</code>) prevents concurrent cycles. If the lock holder&#39;s PID is dead (stale lock), it is automatically cleared.</p>
+</li>
+<li><p><strong>Find promotable rules</strong> — The compiler parses both <code>CLAUDE.md</code> and <code>CLAUDE.local.md</code> into bundles, then compares them. A local rule is &quot;promotable&quot; if it exists only in the local file, or if its properties (text, risk class, priority, intents, domains, tool classes) differ from the root version. Candidates are sorted by priority (highest first) and capped at <code>--max-promotions</code> (default 12).</p>
+</li>
+<li><p><strong>Build candidate</strong> — Constructs a modified <code>CLAUDE.md</code> with the promotable rules inserted into a <code>## Guidance Auto-Promotions</code> section, bounded by HTML comment markers for idempotent future updates.</p>
+</li>
+<li><p><strong>Hash check</strong> — If the candidate content has the same SHA-256 hash as the last below-threshold candidate, skip the cycle (nothing changed).</p>
+</li>
+<li><p><strong>Score</strong> — Uses <code>@claude-flow/guidance/analyzer</code> to score both the original and candidate <code>CLAUDE.md</code> across 6 dimensions, producing composite scores. Also runs <code>benchmark()</code> to compute a delta.</p>
+</li>
+<li><p><strong>A/B benchmark (optional)</strong> — If <code>--ab</code> is passed, runs the <code>abBenchmark()</code> function twice (once with the original, once with the candidate) using the <code>SyntheticContentAwareExecutor</code>. This executor simulates how an agent would respond to various prompts with and without guidance. It counts enforcement terms (NEVER, ALWAYS, MUST) and generates content-aware responses that vary by task type (security, refactoring, performance, testing). The delta gain between the two A/B runs must meet <code>--min-ab-gain</code> (default 0.05).</p>
+</li>
+<li><p><strong>Threshold gate</strong> — The benchmark delta must meet <code>--min-delta</code> (default 0.5) AND the A/B gate must pass (if enabled) AND <code>--apply</code> must be set.</p>
+</li>
+<li><p><strong>Apply or propose</strong> — If all gates pass: back up the current <code>CLAUDE.md</code>, write the updated version, and generate an ADR (<code>docs/adr/ADR-NNN-guidance-local-rule-promotion.md</code>) documenting the promotion with before/after metrics. If any gate fails: save a proposal file to <code>proposals/CLAUDE.promoted.*.md</code> for manual review.</p>
+</li>
+<li><p><strong>Report</strong> — Write <code>autopilot-report.json</code> (last cycle results), update <code>autopilot-state.json</code> (persistent state across cycles), and append to <code>autopilot.log</code>.</p>
+</li>
+<li><p><strong>Release lock</strong> — Always releases the file lock, even on error.</p>
+</li>
+</ol>
 <a href="diagrams/architecture/autopilot-optimization-loop.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/autopilot-optimization-loop.svg" alt="autopilot-optimization-loop"></a>
 <details>
 <summary>Mermaid Source</summary>
@@ -598,7 +761,55 @@ flowchart TB
 </details>
 
 <hr>
-<h2 id="6-file-map">6. File Map</h2>
+<h2 id="6-the-codex-bridge">6. The Codex Bridge</h2>
+<p>Codex lacks Claude Code&#39;s native hook system, so the kit provides <code>guidance-codex-bridge.js</code> as an explicit CLI wrapper. It supports 8 events (<code>pre-command</code>, <code>pre-edit</code>, <code>pre-task</code>, <code>post-edit</code>, <code>post-task</code>, <code>session-start</code>, <code>session-end</code>, <code>status</code>) and maps each to the corresponding hook-handler command (e.g., <code>pre-command</code> maps to <code>pre-bash</code>, <code>session-start</code> maps to <code>session-restore</code>).</p>
+<p>For each event, the bridge:</p>
+<ol>
+<li>Parses CLI arguments (<code>--command</code>, <code>--file</code>, <code>--description</code>, <code>--task-id</code>, etc.) and an optional <code>--payload-json</code> for bulk data</li>
+<li>Constructs a <code>tool_input</code> JSON object matching the format Claude Code would provide on stdin</li>
+<li>Spawns the hook-handler synchronously with the JSON as stdin</li>
+<li>Optionally runs a secondary <code>@claude-flow/cli hooks</code> command for telemetry (unless <code>--skip-cf-hooks</code> is set)</li>
+<li>Prints a JSON summary and exits with the hook-handler&#39;s exit code</li>
+</ol>
+<p>This means Codex repos get the same blocking/allowing behavior: if <code>pre-command</code> blocks a dangerous command, the bridge exits with code 1 and Codex should abort the operation.</p>
+<hr>
+<h2 id="7-integration-suites">7. Integration Suites</h2>
+<p>The <code>guidance-integrations.js</code> CLI and the <code>integration-runners.js</code> module provide 6 integration test suites that exercise every layer of the Advanced runtime:</p>
+<table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>What It Tests</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>hooks</strong></td>
+<td>Full hook lifecycle: pre-task gate, safe and destructive pre-command gates, post-task recording, trust updates, proof chain append</td>
+</tr>
+<tr>
+<td><strong>trust</strong></td>
+<td>Records 5 mixed outcomes (allow, allow, warn, deny, allow) for an agent, verifies score/tier computation, checks trust-based rate limiting</td>
+</tr>
+<tr>
+<td><strong>adversarial</strong></td>
+<td>Injects a prompt injection input, tests memory write threat detection, records 5 agent interactions to trigger collusion detection, runs a 3-voter memory quorum</td>
+</tr>
+<tr>
+<td><strong>proof</strong></td>
+<td>Appends two proof chain entries (file write + memory write), verifies chain integrity, exports and reimports the chain, verifies the imported copy</td>
+</tr>
+<tr>
+<td><strong>conformance</strong></td>
+<td>Runs a conformance test (replay determinism), then replays the trace and verifies results match</td>
+</tr>
+<tr>
+<td><strong>evolution</strong></td>
+<td>Proposes a new rule, simulates it against 3 golden traces with a custom evaluator, compares metrics, and stages a graduated rollout</td>
+</tr>
+</tbody></table>
+<p>Running <code>cf-guidance all</code> executes all 6 suites sequentially and persists the combined report to disk.</p>
+<hr>
+<h2 id="8-file-map">8. File Map</h2>
 <p>Quick reference to key source files and their roles.</p>
 <a href="diagrams/architecture/project-file-map.svg" target="_blank" title="Click to open full size" class="image-link"><img src="diagrams/architecture/project-file-map.svg" alt="project-file-map"></a>
 <details>
@@ -672,6 +883,14 @@ flowchart LR
     Autopilot -->|"imports"| UtilsESM
 </pre>
 </details>
+
+<hr>
+<h2 id="9-key-design-decisions">9. Key Design Decisions</h2>
+<p><strong>CommonJS for the hook-handler.</strong> Claude Code executes hooks by running <code>node &lt;path&gt;</code>. The hook-handler must start fast (it&#39;s in the critical path of every tool use) and support <code>require()</code> for lazy-loading helper modules. CJS avoids the overhead of ESM resolution and allows synchronous <code>require()</code> calls that only load modules when needed.</p>
+<p><strong>Synchronous guidance calls for blocking hooks.</strong> The <code>pre-bash</code>, <code>pre-edit</code>, and <code>pre-task</code> handlers use <code>spawnSync</code> to call the guidance control plane. This is intentional: Claude Code expects the hook process to exit before proceeding, and the exit code determines whether the operation is allowed. The timeout is configurable (<code>GUIDANCE_EVENT_SYNC_TIMEOUT_MS</code>, default 8 seconds) and the fail-open default (<code>GUIDANCE_EVENT_FAIL_CLOSED=0</code>) means a timeout allows the operation rather than blocking it.</p>
+<p><strong>Detached async processes for post-hooks.</strong> Post-edit, post-task, and session-end handlers spawn detached child processes because their work (metric recording, intelligence consolidation, autopilot optimization) should not block the agent. The <code>child.unref()</code> call ensures the hook-handler process can exit immediately.</p>
+<p><strong>Thin shim architecture.</strong> The installer writes a 3-line shim to the target repo rather than copying the full hook-handler. This means updates to the hook-handler logic are picked up automatically via <code>npm update</code> without re-running the installer.</p>
+<p><strong>Dual module system support.</strong> The codebase maintains both <code>.mjs</code> (ESM) and <code>.cjs</code> (CommonJS) variants of shared utilities, and the installer ensures <code>.js</code>/<code>.cjs</code> compatibility pairs exist for all helper modules. This is necessary because the hook-handler is CJS (for fast startup) while the CLI tools and guidance runtime are ESM (for modern <code>import</code> syntax and tree-shaking).</p>
 
   </div>
 

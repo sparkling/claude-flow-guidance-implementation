@@ -346,11 +346,14 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     checks.push({ path: relPath, exists: existsSync(full) });
   }
 
-  // Verify the package dependency is declared.
+  // Verify the package dependency is declared (skip when verifying the package itself).
   const packageJson = readJson(resolve(target, 'package.json'), {});
-  const deps = packageJson.dependencies || {};
-  const hasImplDep = 'claude-flow-guidance-implementation' in deps;
-  checks.push({ path: 'dependency:claude-flow-guidance-implementation', exists: hasImplDep });
+  const isSelf = packageJson.name === 'claude-flow-guidance-implementation';
+  if (!isSelf) {
+    const deps = packageJson.dependencies || {};
+    const hasImplDep = 'claude-flow-guidance-implementation' in deps;
+    checks.push({ path: 'dependency:claude-flow-guidance-implementation', exists: hasImplDep });
+  }
 
   // Check .js/.cjs compat pairs exist for helper modules.
   const compatPairs = checkHelperCompat(resolve(target, '.claude/helpers'));

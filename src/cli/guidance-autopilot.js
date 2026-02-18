@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { analyze, benchmark, abBenchmark } from '@claude-flow/guidance/analyzer';
 import { createCompiler } from '@claude-flow/guidance/compiler';
-import { createSyntheticContentAwareExecutor } from '../src/guidance/content-aware-executor.js';
+import { createSyntheticContentAwareExecutor } from '../guidance/content-aware-executor.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(

@@ -17,7 +17,7 @@ const root = resolve(process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJ
 // Import guidance modules
 const { analyze, autoOptimize, formatReport, formatBenchmark } = await import('@claude-flow/guidance/analyzer');
 const { createGuidanceControlPlane } = await import('@claude-flow/guidance');
-const { createGuidancePhase1Runtime } = await import('../src/guidance/phase1-runtime.js');
+const { createGuidancePhase1Runtime } = await import('../guidance/phase1-runtime.js');
 
 const DATA_DIR = resolve(root, '.claude-flow/guidance');
 const CLAUDE_MD = resolve(root, 'CLAUDE.md');

@@ -42,8 +42,10 @@ const [,, command, ...args] = process.argv;
 // Read stdin JSON from Claude Code hooks (provides tool_input, tool_name, etc.)
 let stdinData = {};
 try {
-  const raw = fs.readFileSync(0, 'utf-8').trim();
-  if (raw) stdinData = JSON.parse(raw);
+  if (!process.stdin.isTTY) {
+    const raw = fs.readFileSync(0, 'utf-8').trim();
+    if (raw) stdinData = JSON.parse(raw);
+  }
 } catch (e) { /* stdin may be empty or non-JSON */ }
 
 const prompt = process.env.PROMPT || (stdinData.tool_input && stdinData.tool_input.command) || args.join(' ') || '';

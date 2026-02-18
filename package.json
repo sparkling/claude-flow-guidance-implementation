@@ -28,34 +28,35 @@
       "import": "./src/default-settings.mjs"
     },
     "./runtime": {
-      "import": "./scaffold/src/guidance/advanced-runtime.js"
+      "import": "./src/guidance/advanced-runtime.js"
     },
     "./phase1": {
-      "import": "./scaffold/src/guidance/phase1-runtime.js"
+      "import": "./src/guidance/phase1-runtime.js"
     },
     "./executor": {
-      "import": "./scaffold/src/guidance/content-aware-executor.js"
+      "import": "./src/guidance/content-aware-executor.js"
     },
     "./hook-handler": {
-      "require": "./scaffold/.claude/helpers/hook-handler.cjs"
+      "import": "./src/hook-handler.cjs",
+      "require": "./src/hook-handler.cjs"
     }
   },
   "files": [
     "bin",
     "src",
-    "scaffold",
+    "docs",
     "README.md",
     "LICENSE"
   ],
   "bin": {
     "cf-guidance-impl": "bin/cf-guidance-impl.mjs",
-    "cf-guidance": "scaffold/scripts/guidance-integrations.js",
-    "cf-guidance-runtime": "scaffold/scripts/guidance-runtime.js",
-    "cf-guidance-autopilot": "scaffold/scripts/guidance-autopilot.js",
-    "cf-guidance-benchmark": "scaffold/scripts/guidance-ab-benchmark.js",
-    "cf-guidance-codex": "scaffold/scripts/guidance-codex-bridge.js",
-    "cf-guidance-analyze": "scaffold/scripts/analyze-guidance.js",
-    "cf-guidance-scaffold": "scaffold/scripts/scaffold-guidance.js"
+    "cf-guidance": "src/cli/guidance-integrations.js",
+    "cf-guidance-runtime": "src/cli/guidance-runtime.js",
+    "cf-guidance-autopilot": "src/cli/guidance-autopilot.js",
+    "cf-guidance-benchmark": "src/cli/guidance-ab-benchmark.js",
+    "cf-guidance-codex": "src/cli/guidance-codex-bridge.js",
+    "cf-guidance-analyze": "src/cli/analyze-guidance.js",
+    "cf-guidance-scaffold": "src/cli/scaffold-guidance.js"
   },
   "scripts": {
     "lint": "node ./bin/cf-guidance-impl.mjs verify --target .",

@@ -2,7 +2,7 @@
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createGuidancePhase1Runtime } from '../src/guidance/phase1-runtime.js';
+import { createGuidancePhase1Runtime } from '../guidance/phase1-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(

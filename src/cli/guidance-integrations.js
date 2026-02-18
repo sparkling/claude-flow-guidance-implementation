@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createGuidanceAdvancedRuntime } from '../src/guidance/advanced-runtime.js';
+import { createGuidanceAdvancedRuntime } from '../guidance/advanced-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(

@@ -13,6 +13,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-edit',
+          timeout: 5000,
         },
       ],
     },
@@ -22,6 +23,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash',
+          timeout: 5000,
         },
       ],
     },
@@ -31,6 +33,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-task',
+          timeout: 5000,
         },
       ],
     },
@@ -42,6 +45,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-edit',
+          timeout: 5000,
         },
       ],
     },
@@ -51,6 +55,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-task',
+          timeout: 5000,
         },
       ],
     },
@@ -62,6 +67,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-restore',
+          timeout: 5000,
         },
       ],
     },
@@ -73,6 +79,7 @@ export const GUIDANCE_HOOKS_DEFAULTS = {
         {
           type: 'command',
           command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-end',
+          timeout: 5000,
         },
       ],
     },

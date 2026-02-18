@@ -1,10 +1,8 @@
 #!/usr/bin/env node
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import { createGuidancePhase1Runtime } from '../guidance/phase1-runtime.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );
@@ -83,7 +81,12 @@ async function run() {
     if (!toolName) {
       throw new Error('tool name is required');
     }
-    const params = JSON.parse(paramsInput);
+    let params;
+    try {
+      params = JSON.parse(paramsInput);
+    } catch {
+      throw new Error(`Invalid JSON parameters: ${paramsInput}`);
+    }
     const result = await runtime.preToolUse(toolName, params);
     printResult('pre-tool-use', result);
     return;

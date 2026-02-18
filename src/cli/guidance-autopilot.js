@@ -2,7 +2,6 @@
 import {
   appendFileSync,
   existsSync,
-  mkdirSync,
   openSync,
   closeSync,
   readFileSync,
@@ -12,13 +11,11 @@ import {
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { analyze, benchmark, abBenchmark } from '@claude-flow/guidance/analyzer';
 import { createCompiler } from '@claude-flow/guidance/compiler';
 import { createSyntheticContentAwareExecutor } from '../guidance/content-aware-executor.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { readJson, writeJson, ensureDir, nowIso } from '../utils.mjs';
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );
@@ -93,31 +90,10 @@ function parseArgs() {
   return options;
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
 function shortHash(input) {
   return createHash('sha256').update(input).digest('hex').slice(0, 16);
 }
 
-function ensureDir(path) {
-  mkdirSync(path, { recursive: true });
-}
-
-function loadJson(path, fallback = {}) {
-  if (!existsSync(path)) return fallback;
-  try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJson(path, value) {
-  ensureDir(dirname(path));
-  writeFileSync(path, JSON.stringify(value, null, 2));
-}
 
 function loadGuidanceFiles() {
   const rootPath = resolve(rootDir, 'CLAUDE.md');
@@ -272,15 +248,34 @@ function acquireLock(lockPath) {
   ensureDir(dirname(lockPath));
   try {
     const fd = openSync(lockPath, 'wx');
+    writeFileSync(lockPath, String(process.pid));
     return fd;
   } catch {
+    // Check if the lock holder is still alive
+    try {
+      const pid = Number(readFileSync(lockPath, 'utf-8').trim());
+      if (pid && Number.isFinite(pid)) {
+        try {
+          process.kill(pid, 0); // Check if process exists
+          return null; // Process is alive, lock is valid
+        } catch {
+          // Process is dead, remove stale lock
+          unlinkSync(lockPath);
+          const fd = openSync(lockPath, 'wx');
+          writeFileSync(lockPath, String(process.pid));
+          return fd;
+        }
+      }
+    } catch {
+      // Can't read lock file, skip
+    }
     return null;
   }
 }
 
 function releaseLock(fd, lockPath) {
-  if (fd != null) closeSync(fd);
-  if (existsSync(lockPath)) unlinkSync(lockPath);
+  try { if (fd != null) closeSync(fd); } catch { /* already closed */ }
+  try { if (existsSync(lockPath)) unlinkSync(lockPath); } catch { /* already removed */ }
 }
 
 function appendLog(logPath, line) {
@@ -306,7 +301,7 @@ async function runCycle(options) {
 
   try {
     const { rootPath, rootContent, localContent } = loadGuidanceFiles();
-    const state = loadJson(statePath, {});
+    const state = readJson(statePath, {});
     const candidates = getPromotableLocalRules(rootContent, localContent).slice(0, options.maxPromotions);
 
     if (candidates.length === 0) {

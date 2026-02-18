@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -8,7 +8,7 @@ import {
   GUIDANCE_PACKAGE_DEPS,
   GUIDANCE_PACKAGE_SCRIPTS,
 } from './default-settings.mjs';
-import { readJson } from './utils.mjs';
+import { readJson, ensureDir, writeJson } from './utils.mjs';
 
 const COMPAT_MODULES = ['router', 'session', 'memory', 'statusline'];
 
@@ -88,10 +88,6 @@ const GUIDANCE_CODEX_AGENTS_BLOCK = [
   '',
 ].join('\n');
 
-function ensureDir(path) {
-  mkdirSync(path, { recursive: true });
-}
-
 function normalizeTargetMode(value = 'both') {
   const mode = String(value || 'both').trim().toLowerCase();
   if (!['both', 'claude', 'codex'].includes(mode)) {
@@ -106,11 +102,6 @@ function usesClaudeMode(mode) {
 
 function usesCodexMode(mode) {
   return mode === 'both' || mode === 'codex';
-}
-
-function writeJson(path, value) {
-  ensureDir(dirname(path));
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function writeText(path, value) {
@@ -373,13 +364,10 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   const smokeInput = '{"tool_input":{"command":"git status"}}';
   let smoke = { status: 0, stdout: '', stderr: '' };
   if (usesClaudeMode(mode)) {
-    smoke = run(
-      'bash',
-      [
-        '-lc',
-        `printf '%s' '${smokeInput}' | node .claude/helpers/hook-handler.cjs pre-bash`,
-      ],
-      target
+    smoke = spawnSync(
+      'node',
+      ['.claude/helpers/hook-handler.cjs', 'pre-bash'],
+      { cwd: target, encoding: 'utf-8', timeout: 30000, input: smokeInput }
     );
   }
 

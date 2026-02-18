@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 
 import { safeString, parseJson } from '../utils.mjs';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );

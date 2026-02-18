@@ -21,6 +21,9 @@
     "access": "public"
   },
   "exports": {
+    ".": {
+      "import": "./src/installer.mjs"
+    },
     "./installer": {
       "import": "./src/installer.mjs"
     },

@@ -1,6 +1,6 @@
 {
   "name": "claude-flow-guidance-implementation",
-  "version": "0.2.0",
+  "version": "3.0.0-alpha.1.wrapper.1",
   "description": "Implementation kit for wiring @claude-flow/guidance into Claude Code and Codex repos with hook automation",
   "type": "module",
   "private": false,

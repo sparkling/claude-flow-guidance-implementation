@@ -595,20 +595,43 @@ cf-guidance-impl init \
   [--install-deps] \
   [--no-dual] \
   [--skip-cf-init] \
-  [--no-verify]
+  [--no-verify] \
+  [--fail-closed] \
+  [--hook-timeout <ms>] \
+  [--event-timeout <ms>] \
+  [--generate-key] \
+  [--no-autopilot] \
+  [--dry-run]
 
 # Install without running @claude-flow/cli init
 cf-guidance-impl install \
   --target <path> \
   [--target-mode both|claude|codex] \
   [--force] \
-  [--install-deps]
+  [--install-deps] \
+  [--fail-closed] \
+  [--hook-timeout <ms>] \
+  [--event-timeout <ms>] \
+  [--generate-key] \
+  [--no-autopilot] \
+  [--dry-run]
 
 # Verify installation
 cf-guidance-impl verify \
   --target <path> \
   [--target-mode both|claude|codex]
 ```
+
+**Additional flags for `init` and `install`:**
+
+| Flag | Description |
+|---|---|
+| `--fail-closed` | Set `GUIDANCE_EVENT_FAIL_CLOSED=1` in settings (block on hook failure). |
+| `--hook-timeout <ms>` | Override the timeout on every hook definition (default: 5000 ms). |
+| `--event-timeout <ms>` | Set `GUIDANCE_EVENT_SYNC_TIMEOUT_MS` in settings. |
+| `--generate-key` | Generate a cryptographic signing key and set `GUIDANCE_PROOF_KEY`. |
+| `--no-autopilot` | Set `GUIDANCE_AUTOPILOT_ENABLED=0` (disable autopilot). |
+| `--dry-run` | Print a JSON report of what would be written, then exit without changes. |
 
 ### Guidance Runtime CLIs
 

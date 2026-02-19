@@ -34,7 +34,15 @@ settings that default to permissive values in development.
 | `GUIDANCE_EVENT_SYNC_TIMEOUT_MS` | `3000`-`5000` | Hook response timeout in milliseconds. Lower than the default `8000` for faster feedback in production. |
 | `GUIDANCE_EVENT_WIRING_ENABLED` | `1` | Confirm guidance is active. This is the default, but setting it explicitly prevents accidental deactivation. |
 | `GUIDANCE_AUTOPILOT_ENABLED` | `0` (CI) / `1` (dev) | Disable autopilot in CI to prevent `CLAUDE.md` modifications during builds. |
+| `GUIDANCE_AUTOPILOT_MIN_DELTA` | `0.5` | Minimum score improvement to trigger rule promotion. |
+| `GUIDANCE_AUTOPILOT_AB` | `0` | Set to `1` to enable A/B benchmarking before promotion. |
+| `GUIDANCE_AUTOPILOT_MIN_AB_GAIN` | `0.05` | Minimum A/B composite gain to proceed with promotion. |
+| `GUIDANCE_CODEX_SKIP_CF_HOOKS` | `0` | Set to `1` to skip secondary `@claude-flow/cli` hook calls in Codex bridge. |
 | `CLAUDE_AGENT_ID` | Per-agent unique ID | Required for multi-agent deployments. Each agent must have a distinct identifier. |
+
+All env vars above are now included in `.claude/settings.json` by default
+when running `cf-guidance-impl init`. The installer merges defaults without
+overwriting existing values.
 
 ### Generate and store the signing key
 
@@ -299,7 +307,24 @@ Complete every item before deploying to production.
 
 Use this checklist for each new production deployment.
 
-### 1. Generate secrets
+### 1. Generate secrets and install
+
+The `--generate-key` and `--fail-closed` flags set production defaults in a
+single command:
+
+```bash
+npx --yes -p claude-flow-guidance-implementation \
+  cf-guidance-impl init --target . --install-deps --skip-cf-init \
+  --generate-key --fail-closed --no-autopilot --event-timeout 5000
+```
+
+This generates a cryptographic signing key, enables fail-closed mode,
+disables autopilot, and sets a 5-second event timeout. The generated key
+is written to `.claude/settings.json` under `GUIDANCE_PROOF_KEY`. Copy it
+to your secrets manager and remove it from the settings file.
+
+Alternatively, generate the key manually and configure environment
+variables:
 
 ```bash
 openssl rand -hex 32
@@ -318,7 +343,7 @@ export GUIDANCE_EVENT_WIRING_ENABLED=1
 export GUIDANCE_AUTOPILOT_ENABLED=0
 ```
 
-### 3. Install guidance
+### 3. Install guidance (if not done in step 1)
 
 ```bash
 npx --yes -p claude-flow-guidance-implementation \

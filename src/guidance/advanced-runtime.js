@@ -29,6 +29,9 @@ const DEFAULT_OPTIONS = {
   dataDir: '.claude-flow/guidance/advanced',
   signingKey: process.env.GUIDANCE_PROOF_KEY || 'local-guidance-dev-signing-key',
   authority: DEFAULT_AUTHORITY,
+  collusionRingMinLength: 3,
+  collusionFrequencyThreshold: 5,
+  memoryQuorumThreshold: 0.67,
 };
 
 // Null-object factories for disabled components.
@@ -119,11 +122,14 @@ export class GuidanceAdvancedRuntime {
       : createNullThreatDetector();
 
     this.collusionDetector = this._enabledComponents.has('adversarial')
-      ? createCollusionDetector({ ringMinLength: 3, frequencyThreshold: 5 })
+      ? createCollusionDetector({
+          ringMinLength: this.options.collusionRingMinLength,
+          frequencyThreshold: this.options.collusionFrequencyThreshold,
+        })
       : createNullCollusionDetector();
 
     this.memoryQuorum = this._enabledComponents.has('adversarial')
-      ? createMemoryQuorum({ threshold: 0.67 })
+      ? createMemoryQuorum({ threshold: this.options.memoryQuorumThreshold })
       : createNullMemoryQuorum();
 
     this.proofChain = this._enabledComponents.has('proof')

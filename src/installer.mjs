@@ -11,6 +11,7 @@ import {
   GUIDANCE_CORE_SCRIPTS,
   GUIDANCE_PRESETS,
   resolveComponents,
+  buildHookDefaults,
 } from './default-settings.mjs';
 import { readJson, ensureDir, writeJson } from './utils.mjs';
 
@@ -192,7 +193,7 @@ process.env.__GUIDANCE_HELPERS_DIR = process.env.__GUIDANCE_HELPERS_DIR || __dir
 require('claude-flow-guidance-implementation/hook-handler');
 `;
 
-export function installIntoRepo({
+export async function installIntoRepo({
   targetRepo,
   force = false,
   installDeps = false,
@@ -200,6 +201,12 @@ export function installIntoRepo({
   components,
   preset,
   exclude,
+  failClosed = false,
+  hookTimeout,
+  eventTimeout,
+  generateKey = false,
+  noAutopilot = false,
+  dryRun = false,
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -225,6 +232,46 @@ export function installIntoRepo({
   }
   const resolvedSet = new Set(resolvedComponents);
   const allowedScripts = getAllowedScripts(resolvedComponents, mode);
+
+  // Build env overrides from CLI flags.
+  const envOverrides = {};
+  if (failClosed) envOverrides.GUIDANCE_EVENT_FAIL_CLOSED = '1';
+  if (eventTimeout) envOverrides.GUIDANCE_EVENT_SYNC_TIMEOUT_MS = String(eventTimeout);
+  if (noAutopilot) envOverrides.GUIDANCE_AUTOPILOT_ENABLED = '0';
+  if (generateKey) {
+    const crypto = await import('node:crypto');
+    envOverrides.GUIDANCE_PROOF_KEY = crypto.randomBytes(32).toString('hex');
+  }
+
+  // Build hook definitions with optional custom timeout.
+  const hookDefaults = hookTimeout ? buildHookDefaults(hookTimeout) : GUIDANCE_HOOKS_DEFAULTS;
+
+  // Compute merged env vars for reporting (and dry-run).
+  const mergedEnv = { ...GUIDANCE_ENV_DEFAULTS, ...envOverrides };
+
+  // Dry-run: compute what would be written and return without touching disk.
+  if (dryRun) {
+    const wouldWrite = [
+      '.claude/helpers/hook-handler.cjs',
+      'package.json',
+    ];
+    if (usesClaudeMode(mode)) wouldWrite.push('.claude/settings.json');
+    if (usesCodexMode(mode) && resolvedSet.has('codex')) {
+      wouldWrite.push('.agents/config.toml', 'AGENTS.md');
+    }
+    wouldWrite.push('.claude-flow/guidance/components.json', 'CLAUDE.local.md', '.gitignore');
+
+    return {
+      dryRun: true,
+      target,
+      targetMode: mode,
+      components: resolvedComponents,
+      wouldWrite,
+      envVars: mergedEnv,
+      hooks: Object.keys(hookDefaults),
+      hookTimeout: hookTimeout || 5000,
+    };
+  }
 
   // Write thin hook-handler shim (delegates to the npm package).
   const shimPath = resolve(target, '.claude/helpers/hook-handler.cjs');
@@ -272,12 +319,18 @@ export function installIntoRepo({
     settingsPath = resolve(target, '.claude/settings.json');
     const settings = readJson(settingsPath, {});
     settings.env = settings.env || {};
+
+    // Apply base defaults (only adds keys that don't exist).
     for (const [key, value] of Object.entries(GUIDANCE_ENV_DEFAULTS)) {
       if (!(key in settings.env)) settings.env[key] = value;
     }
+    // Apply flag-driven overrides (always override).
+    for (const [key, value] of Object.entries(envOverrides)) {
+      settings.env[key] = value;
+    }
 
     settings.hooks = settings.hooks || {};
-    for (const [event, blocks] of Object.entries(GUIDANCE_HOOKS_DEFAULTS)) {
+    for (const [event, blocks] of Object.entries(hookDefaults)) {
       settings.hooks[event] = mergeHookBlocks(settings.hooks[event], blocks);
     }
 
@@ -460,7 +513,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   };
 }
 
-export function initRepo({
+export async function initRepo({
   targetRepo,
   force = false,
   installDeps = false,
@@ -471,6 +524,12 @@ export function initRepo({
   components,
   preset,
   exclude,
+  failClosed = false,
+  hookTimeout,
+  eventTimeout,
+  generateKey = false,
+  noAutopilot = false,
+  dryRun = false,
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -507,7 +566,7 @@ export function initRepo({
     }
   }
 
-  const install = installIntoRepo({
+  const install = await installIntoRepo({
     targetRepo: target,
     force,
     installDeps,
@@ -515,6 +574,12 @@ export function initRepo({
     components,
     preset,
     exclude,
+    failClosed,
+    hookTimeout,
+    eventTimeout,
+    generateKey,
+    noAutopilot,
+    dryRun,
   });
 
   let verifyReport = null;

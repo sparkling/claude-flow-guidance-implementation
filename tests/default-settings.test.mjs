@@ -3,6 +3,7 @@ import {
   GUIDANCE_HOOKS_DEFAULTS,
   GUIDANCE_PACKAGE_SCRIPTS,
   GUIDANCE_PACKAGE_DEPS,
+  buildHookDefaults,
 } from '../src/default-settings.mjs';
 
 // ---------------------------------------------------------------------------
@@ -15,6 +16,11 @@ describe('GUIDANCE_ENV_DEFAULTS', () => {
     expect(keys).toContain('GUIDANCE_EVENT_WIRING_ENABLED');
     expect(keys).toContain('GUIDANCE_EVENT_SYNC_TIMEOUT_MS');
     expect(keys).toContain('GUIDANCE_EVENT_FAIL_CLOSED');
+    expect(keys).toContain('GUIDANCE_AUTOPILOT_ENABLED');
+    expect(keys).toContain('GUIDANCE_AUTOPILOT_MIN_DELTA');
+    expect(keys).toContain('GUIDANCE_AUTOPILOT_AB');
+    expect(keys).toContain('GUIDANCE_AUTOPILOT_MIN_AB_GAIN');
+    expect(keys).toContain('GUIDANCE_CODEX_SKIP_CF_HOOKS');
   });
 
   it('all values are strings', () => {
@@ -28,14 +34,15 @@ describe('GUIDANCE_ENV_DEFAULTS', () => {
 // GUIDANCE_HOOKS_DEFAULTS
 // ---------------------------------------------------------------------------
 describe('GUIDANCE_HOOKS_DEFAULTS', () => {
-  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd keys', () => {
+  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd, Compact keys', () => {
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PostToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionStart');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionEnd');
+    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('Compact');
   });
 
-  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd'];
+  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd', 'Compact'];
 
   for (const category of hookCategories) {
     describe(`${category}`, () => {
@@ -131,5 +138,47 @@ describe('GUIDANCE_PACKAGE_DEPS', () => {
     const version = GUIDANCE_PACKAGE_DEPS['claude-flow-guidance-implementation'];
     expect(typeof version).toBe('string');
     expect(version.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHookDefaults
+// ---------------------------------------------------------------------------
+describe('buildHookDefaults', () => {
+  it('returns the same structure as GUIDANCE_HOOKS_DEFAULTS when called with no args', () => {
+    const defaults = buildHookDefaults();
+    expect(Object.keys(defaults).sort()).toEqual(Object.keys(GUIDANCE_HOOKS_DEFAULTS).sort());
+  });
+
+  it('uses default timeout of 5000 when no argument given', () => {
+    const defaults = buildHookDefaults();
+    for (const blocks of Object.values(defaults)) {
+      for (const block of blocks) {
+        for (const hook of block.hooks) {
+          expect(hook.timeout).toBe(5000);
+        }
+      }
+    }
+  });
+
+  it('applies custom timeout to all hooks', () => {
+    const custom = buildHookDefaults(3000);
+    for (const blocks of Object.values(custom)) {
+      for (const block of blocks) {
+        for (const hook of block.hooks) {
+          expect(hook.timeout).toBe(3000);
+        }
+      }
+    }
+  });
+
+  it('includes Compact hooks', () => {
+    const defaults = buildHookDefaults();
+    expect(defaults).toHaveProperty('Compact');
+    expect(defaults.Compact).toHaveLength(2);
+    expect(defaults.Compact[0].matcher).toBe('manual');
+    expect(defaults.Compact[0].hooks[0].command).toContain('compact-manual');
+    expect(defaults.Compact[1].matcher).toBe('');
+    expect(defaults.Compact[1].hooks[0].command).toContain('compact-auto');
   });
 });

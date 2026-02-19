@@ -3,8 +3,8 @@ import { initRepo, installIntoRepo, verifyRepo } from '../src/installer.mjs';
 
 function usage() {
   console.log(`Usage:
-  cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify]
-  cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps]
+  cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
+  cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
   cf-guidance-impl verify --target <repoPath> [--target-mode both|claude|codex]
 `);
 }
@@ -37,10 +37,23 @@ async function main() {
   const components = componentsRaw ? componentsRaw.split(',').map(s => s.trim()).filter(Boolean) : undefined;
   const exclude = excludeRaw ? excludeRaw.split(',').map(s => s.trim()).filter(Boolean) : undefined;
 
+  const failClosed = hasFlag(args, '--fail-closed');
+  const hookTimeout = (() => {
+    const idx = args.indexOf('--hook-timeout');
+    return idx !== -1 ? Number(args[idx + 1]) : undefined;
+  })();
+  const eventTimeout = (() => {
+    const idx = args.indexOf('--event-timeout');
+    return idx !== -1 ? Number(args[idx + 1]) : undefined;
+  })();
+  const generateKey = hasFlag(args, '--generate-key');
+  const noAutopilot = hasFlag(args, '--no-autopilot');
+  const dryRun = hasFlag(args, '--dry-run');
+
   if (command === 'init') {
     // CLI default: 'standard' preset for fresh installs when no flags given
     const effectivePreset = (!preset && !components && !exclude) ? 'standard' : preset;
-    const result = initRepo({
+    const result = await initRepo({
       targetRepo: target,
       targetMode,
       force,
@@ -51,6 +64,12 @@ async function main() {
       components,
       preset: effectivePreset,
       exclude,
+      failClosed,
+      hookTimeout,
+      eventTimeout,
+      generateKey,
+      noAutopilot,
+      dryRun,
     });
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -59,7 +78,7 @@ async function main() {
   if (command === 'install') {
     // CLI default: 'standard' preset for fresh installs when no flags given
     const effectivePreset = (!preset && !components && !exclude) ? 'standard' : preset;
-    const result = installIntoRepo({
+    const result = await installIntoRepo({
       targetRepo: target,
       targetMode,
       force,
@@ -67,6 +86,12 @@ async function main() {
       components,
       preset: effectivePreset,
       exclude,
+      failClosed,
+      hookTimeout,
+      eventTimeout,
+      generateKey,
+      noAutopilot,
+      dryRun,
     });
     console.log(JSON.stringify(result, null, 2));
     return;

@@ -378,6 +378,9 @@ new GuidanceAdvancedRuntime(options?: AdvancedOptions)
 | `dataDir` | `string` | `'.claude-flow/guidance/advanced'` | Directory for persisted state and proof files, relative to `rootDir`. |
 | `signingKey` | `string` | `process.env.GUIDANCE_PROOF_KEY` or `'local-guidance-dev-signing-key'` | Key used for proof chain signing. Set `GUIDANCE_PROOF_KEY` in production. |
 | `authority` | `AuthorityConfig` | See below | Authority descriptor for conformance testing. |
+| `collusionRingMinLength` | `number` | `3` | Minimum ring length for collusion detection. |
+| `collusionFrequencyThreshold` | `number` | `5` | Frequency threshold for collusion detection alerts. |
+| `memoryQuorumThreshold` | `number` | `0.67` | Vote threshold for memory quorum acceptance. |
 
 Default `authority`:
 
@@ -605,6 +608,11 @@ installation.
   GUIDANCE_EVENT_WIRING_ENABLED: '1',
   GUIDANCE_EVENT_SYNC_TIMEOUT_MS: '8000',
   GUIDANCE_EVENT_FAIL_CLOSED: '0',
+  GUIDANCE_AUTOPILOT_ENABLED: '1',
+  GUIDANCE_AUTOPILOT_MIN_DELTA: '0.5',
+  GUIDANCE_AUTOPILOT_AB: '0',
+  GUIDANCE_AUTOPILOT_MIN_AB_GAIN: '0.05',
+  GUIDANCE_CODEX_SKIP_CF_HOOKS: '0',
 }
 ```
 
@@ -622,8 +630,11 @@ commands for the following events:
 | `PostToolUse` | `Task` | `hook-handler.cjs post-task` |
 | `SessionStart` | (all) | `hook-handler.cjs session-restore` |
 | `SessionEnd` | (all) | `hook-handler.cjs session-end` |
+| `Compact` | `manual` | `hook-handler.cjs compact-manual` |
+| `Compact` | (all) | `hook-handler.cjs compact-auto` |
 
-All hooks use a 5000 ms timeout.
+All hooks use a 5000 ms default timeout (configurable via `--hook-timeout`
+or `buildHookDefaults(timeout)`).
 
 ### GUIDANCE_PACKAGE_SCRIPTS
 
@@ -660,6 +671,26 @@ Map of preset name to component name array:
 | `minimal` | *(none)* |
 | `standard` | `trust`, `proof`, `analysis` |
 | `full` | All 8 components |
+
+### buildHookDefaults
+
+```js
+buildHookDefaults(hookTimeout?: number): HookDefaults
+```
+
+Returns the hook block definitions with a configurable timeout. When called
+with no arguments, uses the default timeout of 5000 ms. The returned object
+has the same shape as `GUIDANCE_HOOKS_DEFAULTS`.
+
+```js
+import { buildHookDefaults } from 'claude-flow-guidance-implementation/settings';
+
+// Default timeout (5000 ms)
+const defaults = buildHookDefaults();
+
+// Custom timeout
+const fast = buildHookDefaults(2000);
+```
 
 ### resolveComponents
 
@@ -760,6 +791,12 @@ cf-guidance-impl verify --target <path> [options]
 | `--no-dual` | Skip `--dual` flag on `@claude-flow/cli init`. |
 | `--skip-cf-init` | Skip the `@claude-flow/cli init` step entirely. |
 | `--no-verify` | Skip post-install verification. |
+| `--fail-closed` | Set `GUIDANCE_EVENT_FAIL_CLOSED=1` in settings. |
+| `--hook-timeout <ms>` | Override the timeout on every hook definition (default: 5000). |
+| `--event-timeout <ms>` | Set `GUIDANCE_EVENT_SYNC_TIMEOUT_MS` in settings. |
+| `--generate-key` | Generate a cryptographic signing key and set `GUIDANCE_PROOF_KEY`. |
+| `--no-autopilot` | Set `GUIDANCE_AUTOPILOT_ENABLED=0` in settings. |
+| `--dry-run` | Print a JSON report of what would be written without making changes. |
 
 The `verify` subcommand exits with code `0` on success and code `2` on
 failure.

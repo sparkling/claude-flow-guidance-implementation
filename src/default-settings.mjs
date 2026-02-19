@@ -3,88 +3,119 @@ export const GUIDANCE_ENV_DEFAULTS = {
   GUIDANCE_EVENT_WIRING_ENABLED: '1',
   GUIDANCE_EVENT_SYNC_TIMEOUT_MS: '8000',
   GUIDANCE_EVENT_FAIL_CLOSED: '0',
+  GUIDANCE_AUTOPILOT_ENABLED: '1',
+  GUIDANCE_AUTOPILOT_MIN_DELTA: '0.5',
+  GUIDANCE_AUTOPILOT_AB: '0',
+  GUIDANCE_AUTOPILOT_MIN_AB_GAIN: '0.05',
+  GUIDANCE_CODEX_SKIP_CF_HOOKS: '0',
 };
 
-export const GUIDANCE_HOOKS_DEFAULTS = {
-  PreToolUse: [
-    {
-      matcher: 'Write|Edit|MultiEdit',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-edit',
-          timeout: 5000,
-        },
-      ],
-    },
-    {
-      matcher: 'Bash',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash',
-          timeout: 5000,
-        },
-      ],
-    },
-    {
-      matcher: 'Task',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-task',
-          timeout: 5000,
-        },
-      ],
-    },
-  ],
-  PostToolUse: [
-    {
-      matcher: 'Write|Edit|MultiEdit',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-edit',
-          timeout: 5000,
-        },
-      ],
-    },
-    {
-      matcher: 'Task',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-task',
-          timeout: 5000,
-        },
-      ],
-    },
-  ],
-  SessionStart: [
-    {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-restore',
-          timeout: 5000,
-        },
-      ],
-    },
-  ],
-  SessionEnd: [
-    {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-end',
-          timeout: 5000,
-        },
-      ],
-    },
-  ],
-};
+export function buildHookDefaults(hookTimeout = 5000) {
+  return {
+    PreToolUse: [
+      {
+        matcher: 'Write|Edit|MultiEdit',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-edit',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+      {
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+      {
+        matcher: 'Task',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-task',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    PostToolUse: [
+      {
+        matcher: 'Write|Edit|MultiEdit',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-edit',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+      {
+        matcher: 'Task',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-task',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    SessionStart: [
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-restore',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    SessionEnd: [
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-end',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    Compact: [
+      {
+        matcher: 'manual',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-manual',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-auto',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export const GUIDANCE_HOOKS_DEFAULTS = buildHookDefaults();
 
 export const GUIDANCE_PACKAGE_SCRIPTS = {
   'guidance:analyze': 'cf-guidance-analyze',

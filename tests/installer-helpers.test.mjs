@@ -134,9 +134,9 @@ describe('installIntoRepo', () => {
     expect(content).toContain('CLAUDE.local.md');
   });
 
-  it('throws on non-existent target', () => {
+  it('throws on non-existent target', async () => {
     const badPath = resolve(tmpDir, 'does-not-exist');
-    expect(() => installIntoRepo({ targetRepo: badPath })).toThrow(
+    await expect(installIntoRepo({ targetRepo: badPath })).rejects.toThrow(
       /Target repo does not exist/
     );
   });

@@ -317,6 +317,16 @@ The installer merges the following default environment variables into
 | `GUIDANCE_EVENT_WIRING_ENABLED` | `1` | Enables the guidance event pipeline. Set to `0` to disable without removing hooks. |
 | `GUIDANCE_EVENT_SYNC_TIMEOUT_MS` | `8000` | Maximum wait time for synchronous hook execution. |
 | `GUIDANCE_EVENT_FAIL_CLOSED` | `0` | When `1`, hook failures block the tool call. When `0`, hook failures are logged but the tool call proceeds. |
+| `GUIDANCE_AUTOPILOT_ENABLED` | `1` | Set to `0` to disable autopilot at session end. |
+| `GUIDANCE_AUTOPILOT_MIN_DELTA` | `0.5` | Minimum score improvement to trigger rule promotion. |
+| `GUIDANCE_AUTOPILOT_AB` | `0` | Set to `1` to enable A/B benchmarking before promotion. |
+| `GUIDANCE_AUTOPILOT_MIN_AB_GAIN` | `0.05` | Minimum A/B composite gain to proceed with promotion. |
+| `GUIDANCE_CODEX_SKIP_CF_HOOKS` | `0` | Set to `1` to skip secondary `@claude-flow/cli` hook calls in Codex bridge. |
+
+**Note for existing repositories:** Re-running the installer adds the 5 new
+environment variables (`GUIDANCE_AUTOPILOT_*`, `GUIDANCE_CODEX_SKIP_CF_HOOKS`)
+to `settings.env` only when the key does not already exist. Your existing
+configuration is preserved.
 
 ## Rollback
 

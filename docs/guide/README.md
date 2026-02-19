@@ -7,7 +7,7 @@ governance for AI coding agents.
 
 | Document | Description | Audience |
 |---|---|---|
-| [User Manual](user-manual.md) | Complete reference covering all components, hook integration, environment variables, CLI, and programmatic API | All developers |
+| [User Manual](../../README.md) | Complete reference covering all components, hook integration, environment variables, CLI, and programmatic API | All developers |
 | [Quick Start](quick-start.md) | Hands-on tutorial: install, trigger a blocked command, inspect the proof chain | New users |
 | [Authoring CLAUDE.md](authoring-claude-md.md) | How to write rules that compile well into the guidance control plane | Rule authors |
 | [Trust System](trust-system.md) | Trust tiers, scoring, rate limiting, persistence, and inspection | Platform engineers |
@@ -20,7 +20,7 @@ governance for AI coding agents.
 ## Recommended Reading Order
 
 1. **Quick Start** -- get a working installation in 10 minutes
-2. **User Manual** -- understand the full system
+2. **User Manual** (root [README.md](../../README.md)) -- understand the full system
 3. **Authoring CLAUDE.md** -- write effective governance rules
 4. **Gate Configuration** -- tune what gets blocked
 5. **Trust System** -- understand per-agent scoring

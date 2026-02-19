@@ -411,9 +411,8 @@ npx cf-guidance-scaffold --output ./my-output-dir
 
 ## Further reading
 
-- [Guidance Control Plane](../guidance-control-plane.md) -- Architecture of the
-  policy enforcement pipeline.
-- [Guidance Implementation Guide](../guidance-implementation-guide.md) --
-  Integrating the guidance runtime into your repository.
-- [User Manual](../user-manual.md) -- Full operational reference for all CLI
-  tools.
+- [Architecture](../architecture.md) -- Solutions architecture with diagrams.
+- [Gate Configuration](gate-configuration.md) -- The four enforcement gates and
+  tuning options.
+- [API Reference](api-reference.md) -- Full API surface, upstream CLI commands,
+  and programmatic exports.

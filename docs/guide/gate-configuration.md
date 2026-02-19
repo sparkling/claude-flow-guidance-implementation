@@ -415,3 +415,18 @@ The following table maps each runtime method to the gates it activates:
 | `preCommand(command)` | Yes | -- | -- | Yes | Yes |
 | `preEdit({ filePath, content, diffLines })` | -- | -- | Yes | Yes | -- |
 | `preToolUse(toolName, parameters)` | -- | Yes | -- | Yes | -- |
+
+## Known limitations
+
+- Hook payload metadata from Claude Code can be sparse, so some event
+  details may default to empty values.
+- `post-task` currently receives empty `toolsUsed` and `filesTouched`
+  arrays unless the caller provides them explicitly. Claude Code does not
+  include these fields in the `PostToolUse` event payload.
+- The live adversarial detection path is strongest on command input
+  (`pre-command`). Full collusion detection and memory quorum workflows are
+  primarily exercised through the advanced integration suite
+  (`npm run guidance:adversarial`), not on every hook invocation.
+- The default sync error policy is fail-open
+  (`GUIDANCE_EVENT_FAIL_CLOSED=0`). Set to `1` for production. See the
+  [deployment guide](deployment.md) for hardening recommendations.

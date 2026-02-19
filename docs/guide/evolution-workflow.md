@@ -485,8 +485,10 @@ The following npm scripts and CLI binaries relate to rule evolution:
 
 ## What's next
 
-- Read the [guidance control plane documentation](../guidance-control-plane.md)
-  for details on the trust, adversarial, proof, and conformance subsystems
-  that complement rule evolution.
-- Review the [implementation guide](../guidance-implementation-guide.md) for
-  instructions on wiring hooks into a new repository.
+- Read the [architecture documentation](../architecture.md) for the full
+  solutions architecture with diagrams.
+- Review the [migration guide](migration.md) for instructions on wiring hooks
+  into a new repository.
+- See the [trust system](trust-system.md) and
+  [gate configuration](gate-configuration.md) guides for the subsystems that
+  complement rule evolution.

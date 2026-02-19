@@ -355,6 +355,35 @@ if (runtime.isBlocked(result)) {
 }
 ```
 
+### Note: `createGuidanceHooks` signature
+
+The upstream `@claude-flow/guidance` README shows an object-style call:
+
+```ts
+createGuidanceHooks({ gates, retriever, ledger })
+```
+
+The installed API uses positional arguments:
+
+```ts
+createGuidanceHooks(gates, retriever, ledger, registry?)
+```
+
+Example:
+
+```ts
+import { createGuidanceHooks } from '@claude-flow/guidance';
+
+const { provider, hookIds } = createGuidanceHooks(gates, retriever, ledger, hookRegistry);
+// or:
+// const { provider } = createGuidanceHooks(gates, retriever, ledger);
+// provider.registerAll(hookRegistry);
+```
+
+In this package, this is already handled inside
+`src/guidance/phase1-runtime.js`. External Claude hook wiring is done through
+shell commands, not direct provider registry injection.
+
 ---
 
 ## GuidanceAdvancedRuntime
@@ -753,6 +782,124 @@ dispatches to the appropriate handler.
 | `CLAUDE_SESSION_ID` | (generated) | Explicit session ID override. |
 | `CLAUDE_AGENT_ID` | `'claude-main'` | Explicit agent ID override. |
 | `__GUIDANCE_HELPERS_DIR` | `__dirname` | Directory containing helper modules (router, session, intelligence). |
+
+---
+
+## Upstream CLI commands (`@claude-flow/cli guidance`)
+
+The `@claude-flow/cli` package exposes guidance subcommands that operate
+on `CLAUDE.md` independently of this implementation package. These are
+useful for standalone policy analysis without the full hook-handler
+integration.
+
+**Important:** Promotional snippets sometimes show `npx claude-flow analyze
+CLAUDE.md` or `npx claude-flow ab-benchmark`. In the current CLI the
+guidance commands are namespaced under `guidance`:
+
+```bash
+npx @claude-flow/cli@latest guidance <subcommand>
+```
+
+`claude-flow analyze` is a different command family (code/diff analysis),
+not guidance scoring.
+
+### `guidance compile`
+
+Compiles `CLAUDE.md` into constitution + shards + manifest.
+
+| Flag | Description |
+|---|---|
+| `--root, -r <path>` | Root guidance file (default `./CLAUDE.md`) |
+| `--local, -l <path>` | Local overlay file |
+| `--output, -o <dir>` | Output directory |
+| `--json` | Machine-readable output |
+
+```bash
+npx @claude-flow/cli@latest guidance compile
+npx @claude-flow/cli@latest guidance compile -r ./CLAUDE.md -l ./CLAUDE.local.md --json
+```
+
+### `guidance retrieve`
+
+Retrieves task-relevant shards by intent.
+
+| Flag | Description |
+|---|---|
+| `--task, -t <text>` | Required task description |
+| `--root, -r <path>` | Root guidance file |
+| `--local, -l <path>` | Local overlay |
+| `--max-shards, -n <number>` | Max shard count (default `5`) |
+| `--intent, -i <intent>` | Override detected intent |
+| `--json` | Machine-readable output |
+
+```bash
+npx @claude-flow/cli@latest guidance retrieve --task "Fix auth bug"
+npx @claude-flow/cli@latest guidance retrieve -t "Refactor API" --intent refactor
+```
+
+### `guidance gates`
+
+Runs enforcement gates against command/content/tool inputs.
+
+| Flag | Description |
+|---|---|
+| `--command, -c <cmd>` | Evaluate command risk |
+| `--content <text>` | Evaluate content (secret scans) |
+| `--tool, -t <name>` | Tool allowlist check |
+| `--json` | Machine-readable output |
+
+```bash
+npx @claude-flow/cli@latest guidance gates -c "git push --force origin main"
+npx @claude-flow/cli@latest guidance gates --content "api_key=sk-test..."
+npx @claude-flow/cli@latest guidance gates -t Bash
+```
+
+### `guidance status`
+
+Reports guidance files and compiled bundle stats.
+
+```bash
+npx @claude-flow/cli@latest guidance status
+npx @claude-flow/cli@latest guidance status --json
+```
+
+### `guidance optimize`
+
+Analyses and optimises guidance content.
+
+| Flag | Description |
+|---|---|
+| `--root, -r <path>` | Root guidance file |
+| `--local, -l <path>` | Local overlay |
+| `--apply, -a` | Write optimised output back to root file |
+| `--context-size, -s <compact\|standard\|full>` | Optimisation target size |
+| `--target-score <0-100>` | Composite score target (default `90`) |
+| `--max-iterations <n>` | Optimisation iterations (default `5`) |
+| `--json` | Machine-readable output |
+
+```bash
+npx @claude-flow/cli@latest guidance optimize
+npx @claude-flow/cli@latest guidance optimize --apply
+npx @claude-flow/cli@latest guidance optimize -s compact --target-score 95 --apply
+```
+
+### `guidance ab-test`
+
+Runs baseline vs candidate behavioural comparison.
+
+| Flag | Description |
+|---|---|
+| `--config-a, -a <path>` | Baseline guidance path (optional; default baseline mode) |
+| `--config-b, -b <path>` | Candidate guidance path (default `./CLAUDE.md`) |
+| `--tasks, -t <json-file>` | Custom A/B tasks |
+| `--work-dir, -w <path>` | Working directory |
+| `--json` | Machine-readable output |
+
+```bash
+npx @claude-flow/cli@latest guidance ab-test
+npx @claude-flow/cli@latest guidance ab-test -a old.md -b CLAUDE.md
+npx @claude-flow/cli@latest guidance ab-test --tasks custom-ab-tasks.json
+```
 
 ---
 

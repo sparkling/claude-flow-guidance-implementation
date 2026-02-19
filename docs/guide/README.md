@@ -32,5 +32,3 @@ governance for AI coding agents.
 ## Related Documentation
 
 - [Architecture](../architecture.md) -- solutions architecture with diagrams
-- [Guidance Control Plane](../guidance-control-plane.md) -- operational overview
-- [Implementation Guide](../guidance-implementation-guide.md) -- authoritative implementation reference

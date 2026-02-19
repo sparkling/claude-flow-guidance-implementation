@@ -439,6 +439,23 @@ With `--force`:
 Environment variables and hook blocks still follow merge semantics. The
 `--force` flag does not delete your existing hooks or environment values.
 
+## Component selection for existing repositories
+
+Existing repositories that were installed before the component system was
+added will not have a `.claude-flow/guidance/components.json` file. In this
+case, all subsystems default to enabled, which matches the previous
+behaviour. No action is needed.
+
+To explicitly pin the full set of components, re-run the installer with
+`--preset full`:
+
+```bash
+npx cf-guidance-impl install --target . --preset full
+```
+
+This writes `components.json` and ensures future re-runs preserve the full
+selection.
+
 ## Next steps
 
 After migration, consult these resources:

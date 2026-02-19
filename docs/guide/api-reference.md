@@ -81,6 +81,9 @@ initRepo(options: InitRepoOptions): InitRepoResult
 | `dual` | `boolean` | `true` | Pass `--dual` to `@claude-flow/cli init` when `targetMode` is `'both'`. |
 | `skipCfInit` | `boolean` | `false` | Skip the `npx @claude-flow/cli init` step. |
 | `verify` | `boolean` | `true` | Run `verifyRepo` after installation. Throws on failure. |
+| `components` | `string[]` | `undefined` | Explicit list of component names to install. Overrides `preset`. |
+| `preset` | `'minimal' \| 'standard' \| 'full'` | `undefined` | Named preset. Defaults to `'full'` for programmatic API, `'standard'` for CLI. |
+| `exclude` | `string[]` | `undefined` | Component names to exclude from the resolved set. |
 
 **Returns** `InitRepoResult`
 
@@ -130,6 +133,9 @@ installIntoRepo(options: InstallOptions): InstallResult
 | `force` | `boolean` | `false` | Overwrite existing shims and scripts. |
 | `installDeps` | `boolean` | `false` | Run `npm install` after writing `package.json`. |
 | `targetMode` | `'both' \| 'claude' \| 'codex'` | `'both'` | Target platform. |
+| `components` | `string[]` | `undefined` | Explicit list of component names. Overrides `preset`. |
+| `preset` | `'minimal' \| 'standard' \| 'full'` | `undefined` | Named preset. Defaults to `'full'` when called programmatically. |
+| `exclude` | `string[]` | `undefined` | Component names to exclude from the resolved set. |
 
 **Returns** `InstallResult`
 
@@ -624,6 +630,47 @@ All hooks use a 5000 ms timeout.
 npm scripts added to the target repository's `package.json`. Includes
 scripts for analysis, optimization, autopilot, benchmarking, scaffolding,
 integration suite commands, and Codex bridge lifecycle commands.
+
+### GUIDANCE_COMPONENTS
+
+Map of component name to metadata. Each entry has:
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | `string` | Human-readable component name. |
+| `description` | `string` | Short description of what the component provides. |
+| `scripts` | `string[]` | npm script names owned by this component. |
+| `runtimeSubsystems` | `string[]` | Runtime subsystem property names gated by this component. |
+
+8 components: `trust`, `adversarial`, `proof`, `conformance`, `evolution`,
+`autopilot`, `analysis`, `codex`.
+
+### GUIDANCE_CORE_SCRIPTS
+
+Array of npm script names that are always installed regardless of component
+selection: `guidance:status`, `guidance:all`, `guidance:hooks`,
+`guidance:runtime`.
+
+### GUIDANCE_PRESETS
+
+Map of preset name to component name array:
+
+| Preset | Components |
+|---|---|
+| `minimal` | *(none)* |
+| `standard` | `trust`, `proof`, `analysis` |
+| `full` | All 8 components |
+
+### resolveComponents
+
+```js
+resolveComponents(options?: { components?: string[], exclude?: string[], preset?: string }): string[]
+```
+
+Resolves a final list of enabled component names. When `components` is
+provided, it overrides the preset. Otherwise the `preset` is used (default:
+`'standard'`). The `exclude` array removes names from the resolved set.
+Returns a sorted array. Throws on unknown component or preset names.
 
 ### GUIDANCE_PACKAGE_DEPS
 

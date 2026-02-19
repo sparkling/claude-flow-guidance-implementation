@@ -38,6 +38,16 @@ flag runs `npm install` automatically after scaffolding.
 npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target . --install-deps
 ```
 
+By default the CLI installs the `standard` preset (trust, proof, and
+analysis). To install all subsystems, add `--preset full`. To install
+only the Phase 1 core with no optional subsystems, use `--preset
+minimal`.
+
+```bash
+# Full installation with all 8 optional subsystems
+npx --yes -p claude-flow-guidance-implementation cf-guidance-impl init --target . --install-deps --preset full
+```
+
 The command performs the following actions:
 
 1. Runs `npx @claude-flow/cli init` to scaffold the base Claude Flow

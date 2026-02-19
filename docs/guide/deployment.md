@@ -77,6 +77,14 @@ npx --yes -p claude-flow-guidance-implementation \
   cf-guidance-impl init --target . --install-deps --skip-cf-init
 ```
 
+For CI environments where trust scoring and adversarial detection overhead
+is unnecessary, use the `minimal` preset to install only the Phase 1 core:
+
+```bash
+npx --yes -p claude-flow-guidance-implementation \
+  cf-guidance-impl init --target . --install-deps --skip-cf-init --preset minimal
+```
+
 ### CI/CD integration pattern
 
 Add the following steps to your pipeline after dependency installation:

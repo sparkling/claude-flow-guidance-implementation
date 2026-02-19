@@ -65,7 +65,63 @@ target repository after the installer adds them to `package.json`.
 
 ---
 
-## 3. Installation
+## 3. Component Selection
+
+The package includes 8 optional subsystems. Only the Phase 1 core
+(policy compilation, gates, and ledger) is always installed. You choose
+which additional subsystems to include during installation.
+
+### Available Components
+
+| Component | What It Adds |
+|---|---|
+| `trust` | Per-agent trust scoring with privilege tiers |
+| `adversarial` | Prompt injection detection, collusion detection, and memory quorum |
+| `proof` | HMAC-SHA256 hash-chained cryptographic proof chain |
+| `conformance` | Memory Clerk acceptance testing with replay verification |
+| `evolution` | Propose, simulate, stage, and rollout rule changes |
+| `autopilot` | One-shot and daemon-mode CLAUDE.md rule optimization with A/B benchmarking |
+| `analysis` | Policy analysis scoring and project scaffolding |
+| `codex` | OpenAI Codex lifecycle bridge for equivalent guidance enforcement |
+
+### Presets
+
+| Preset | Components Included |
+|---|---|
+| `minimal` | None (Phase 1 gates only) |
+| `standard` | trust, proof, analysis |
+| `full` | All 8 components |
+
+The CLI defaults to `standard` for new installations. The programmatic
+API defaults to `full` for backwards compatibility.
+
+### CLI Flags
+
+```bash
+# Use a named preset
+cf-guidance-impl init --target . --preset standard
+
+# Explicit component list (overrides preset)
+cf-guidance-impl init --target . --components trust,proof,adversarial
+
+# Start from full and exclude specific components
+cf-guidance-impl init --target . --preset full --exclude autopilot,codex
+```
+
+### Checking Enabled Components
+
+After installation, the selected components are persisted to
+`.claude-flow/guidance/components.json`. Subsequent `install` runs
+without flags read this file and preserve your selection.
+
+Disabled subsystems use safe no-op stubs at runtime, so no code changes
+are needed in consumers. Methods like `trustSystem.getAllSnapshots()`
+return empty arrays and `proofChain.export()` returns
+`{ envelopes: [] }` when the corresponding component is disabled.
+
+---
+
+## 4. Installation
 
 ### Option A: One-Command Install (Recommended)
 
@@ -118,7 +174,7 @@ A passing verification prints `"passed": true` in the JSON output.
 
 ---
 
-## 4. Integration Modes
+## 5. Integration Modes
 
 The installer supports three target modes that control which agent
 platform receives hook wiring.
@@ -189,9 +245,9 @@ for telemetry. Disable the secondary call with `--skip-cf-hooks` or
 
 ---
 
-## 5. Component Reference
+## 6. Component Reference
 
-### 5.1 Installer (`src/installer.mjs`)
+### 6.1 Installer (`src/installer.mjs`)
 
 The installer provides three functions:
 
@@ -213,7 +269,7 @@ The installer provides three functions:
 | `skipCfInit` | boolean | `false` | Skip the `@claude-flow/cli init` step |
 | `verify` | boolean | `true` | Run verification after install |
 
-### 5.2 Hook Handler (`src/hook-handler.cjs`)
+### 6.2 Hook Handler (`src/hook-handler.cjs`)
 
 The central dispatcher. This is a CommonJS file (`.cjs`) because Claude
 Code's hook system spawns it via `node`, and CommonJS provides the
@@ -245,7 +301,7 @@ task description, and other parameters.
 action is blocked. Async hooks always exit 0 because they do not gate
 the action.
 
-### 5.3 Phase 1 Runtime (`src/guidance/phase1-runtime.js`)
+### 6.3 Phase 1 Runtime (`src/guidance/phase1-runtime.js`)
 
 Wraps the four core guidance modules into a single class.
 
@@ -277,7 +333,7 @@ CLAUDE.md → GuidanceCompiler → Bundle → ShardRetriever → EnforcementGate
 | `getBundle()` | Bundle | Returns the compiled policy bundle |
 | `getStatus()` | object | Returns runtime metrics (hook count, shard count, gate count, ledger events) |
 
-### 5.4 Advanced Runtime (`src/guidance/advanced-runtime.js`)
+### 6.4 Advanced Runtime (`src/guidance/advanced-runtime.js`)
 
 Extends the Phase 1 runtime with trust scoring, adversarial defence,
 cryptographic proof chains, conformance testing, and rule evolution.
@@ -317,7 +373,7 @@ Phase 1 Runtime
 | `runEvolutionIntegration()` | Full evolution pipeline: propose, simulate, compare, stage, advance |
 | `runAllIntegrations()` | Runs all six integration runners and returns a combined report |
 
-### 5.5 Event Handlers (`src/cli/event-handlers.js`)
+### 6.5 Event Handlers (`src/cli/event-handlers.js`)
 
 Implements the full event processing pipeline for guidance events
 dispatched from the hook handler. Each event type follows the same
@@ -333,14 +389,14 @@ pattern:
 Supported events: `pre-command`, `pre-edit`, `pre-task`, `post-task`,
 `post-edit`, `session-end`.
 
-### 5.6 Codex Bridge (`src/cli/guidance-codex-bridge.js`)
+### 6.6 Codex Bridge (`src/cli/guidance-codex-bridge.js`)
 
 Adapts Codex lifecycle events to the hook handler protocol. Accepts
 command-line arguments, constructs the stdin JSON that the hook handler
 expects, spawns `hook-handler.cjs` via `spawnSync`, and optionally
 forwards to `@claude-flow/cli` hooks for telemetry.
 
-### 5.7 Autopilot (`src/cli/guidance-autopilot.js`)
+### 6.7 Autopilot (`src/cli/guidance-autopilot.js`)
 
 Continuously or one-shot optimises `CLAUDE.md` rules by:
 
@@ -367,7 +423,7 @@ Continuously or one-shot optimises `CLAUDE.md` rules by:
 | `GUIDANCE_AUTOPILOT_AB` | `0` | Set to `1` to enable A/B benchmarking before promotion |
 | `GUIDANCE_AUTOPILOT_MIN_AB_GAIN` | `0.05` | Minimum A/B composite gain to proceed |
 
-### 5.8 Analyzer (`src/cli/analyze-guidance.js`)
+### 6.8 Analyzer (`src/cli/analyze-guidance.js`)
 
 Compiles `CLAUDE.md` into a policy bundle and scores it across six
 dimensions:
@@ -383,7 +439,7 @@ dimensions:
 
 Run with `--optimize` to auto-improve the CLAUDE.md score.
 
-### 5.9 A/B Benchmark (`src/cli/guidance-ab-benchmark.js`)
+### 6.9 A/B Benchmark (`src/cli/guidance-ab-benchmark.js`)
 
 Runs controlled comparisons using a synthetic content-aware executor:
 
@@ -398,7 +454,7 @@ behaviour based on the enforcement strength of the CLAUDE.md content
 (counting MUST/NEVER/ALWAYS terms) to produce deterministic,
 reproducible benchmarks.
 
-### 5.10 Scaffold (`src/cli/scaffold-guidance.js`)
+### 6.10 Scaffold (`src/cli/scaffold-guidance.js`)
 
 Generates a recommended `CLAUDE.md` from your project's `package.json`.
 Detects frameworks, build commands, test commands, and produces a
@@ -408,14 +464,14 @@ structured guidance file with best-practice rules.
 npx cf-guidance-scaffold --output ./scaffolded
 ```
 
-### 5.11 Default Settings (`src/default-settings.mjs`)
+### 6.11 Default Settings (`src/default-settings.mjs`)
 
 Exports the default hook definitions, environment variables, npm
 scripts, and dependency declarations that the installer merges into the
 target repository. These values are the source of truth for what the
 installer writes.
 
-### 5.12 Content-Aware Executor (`src/guidance/content-aware-executor.js`)
+### 6.12 Content-Aware Executor (`src/guidance/content-aware-executor.js`)
 
 A lightweight synthetic executor used by the A/B benchmark. It does not
 call any LLM. Instead, it counts enforcement terms in the CLAUDE.md to
@@ -424,9 +480,9 @@ snippets that simulate guided vs. unguided agent behaviour.
 
 ---
 
-## 6. How the Hook Integration Works
+## 7. How the Hook Integration Works
 
-### 6.1 The Request Path
+### 7.1 The Request Path
 
 When Claude Code is about to execute a tool (shell command, file edit,
 or task), the following sequence runs:
@@ -460,7 +516,7 @@ Claude Code
   └─ Claude Code proceeds with (or aborts) the tool use
 ```
 
-### 6.2 Blocking vs. Async Hooks
+### 7.2 Blocking vs. Async Hooks
 
 **Blocking hooks** (`pre-bash`, `pre-edit`, `pre-task`) use `spawnSync`
 to call the guidance event handler. The hook handler waits for the
@@ -472,7 +528,7 @@ with `detached: true` and `stdio: 'ignore'`. The child process runs in
 the background and the hook handler returns immediately with exit code
 0. This ensures post-action recording does not slow down the agent.
 
-### 6.3 The Hook Handler Dispatch Table
+### 7.3 The Hook Handler Dispatch Table
 
 The hook handler uses a flat dispatch table:
 
@@ -497,7 +553,7 @@ Each handler function is self-contained and accesses shared utilities
 (stdin parsing, guidance event dispatch, task cache) through module-level
 functions.
 
-### 6.4 Task Context Persistence
+### 7.4 Task Context Persistence
 
 The hook handler maintains a task cache at
 `.claude-flow/guidance/hook-task-cache.json`. When `pre-task` fires, it
@@ -509,7 +565,7 @@ because Claude Code does not pass the task description in the
 
 ---
 
-## 7. Environment Variables
+## 8. Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
@@ -526,7 +582,7 @@ because Claude Code does not pass the task description in the
 
 ---
 
-## 8. CLI Reference
+## 9. CLI Reference
 
 ### Installer CLI (`cf-guidance-impl`)
 
@@ -583,7 +639,7 @@ cf-guidance-impl verify \
 
 ---
 
-## 9. npm Scripts (Installed in Target Repo)
+## 10. npm Scripts (Installed in Target Repo)
 
 After running `cf-guidance-impl init`, the following scripts are
 available in the target repository:
@@ -616,7 +672,7 @@ available in the target repository:
 
 ---
 
-## 10. Programmatic API
+## 11. Programmatic API
 
 The package exports several entry points for use in your own code:
 
@@ -676,7 +732,7 @@ console.log(JSON.stringify(report, null, 2));
 
 ---
 
-## 11. File Layout
+## 12. File Layout
 
 After installation, your target repository contains:
 
@@ -702,7 +758,7 @@ my-project/
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 ### Hook handler exits with "Missing required guidance file"
 
@@ -755,7 +811,7 @@ signed with the dev key should not be used for compliance purposes.
 
 ---
 
-## 13. Security Considerations
+## 14. Security Considerations
 
 - **Fail-open by default.** If the guidance control plane fails (crash,
   timeout, missing dependency), actions are allowed to proceed. Set

@@ -44,6 +44,21 @@ governance.
 
 ---
 
+## Guides
+
+| Document | Description |
+|---|---|
+| [Quick Start](docs/guide/quick-start.md) | Hands-on tutorial: install, trigger a blocked command, inspect the proof chain |
+| [Authoring CLAUDE.md](docs/guide/authoring-claude-md.md) | How to write rules that compile well into the guidance control plane |
+| [Trust System](docs/guide/trust-system.md) | Trust tiers, scoring, rate limiting, persistence, and inspection |
+| [Gate Configuration](docs/guide/gate-configuration.md) | The four enforcement gates, ContinueGate, threat detection, and tuning |
+| [Evolution Workflow](docs/guide/evolution-workflow.md) | Rule evolution lifecycle: propose, simulate, stage, rollout, autopilot, A/B benchmark |
+| [Deployment](docs/guide/deployment.md) | Production setup, CI/CD integration, signing keys, monitoring, security hardening |
+| [Migration](docs/guide/migration.md) | Adding guidance to existing repos with or without prior hook wiring |
+| [API Reference](docs/guide/api-reference.md) | Full API surface: exports, method signatures, types, CLI binaries, changelog |
+
+---
+
 ## 2. Prerequisites
 
 - **Node.js** 20 or later
@@ -851,21 +866,6 @@ signed with the dev key should not be used for compliance purposes.
 - **Threat detection is heuristic.** The threat detector uses pattern
   matching, not ML. Sophisticated prompt injections may not be caught.
   Layer this with other security controls.
-
----
-
-## 15. Further Reading
-
-| Document | Description |
-|---|---|
-| [Quick Start](docs/guide/quick-start.md) | Hands-on tutorial: install, trigger a blocked command, inspect the proof chain |
-| [Authoring CLAUDE.md](docs/guide/authoring-claude-md.md) | How to write rules that compile well into the guidance control plane |
-| [Trust System](docs/guide/trust-system.md) | Trust tiers, scoring, rate limiting, persistence, and inspection |
-| [Gate Configuration](docs/guide/gate-configuration.md) | The four enforcement gates, ContinueGate, threat detection, and tuning |
-| [Evolution Workflow](docs/guide/evolution-workflow.md) | Rule evolution lifecycle: propose, simulate, stage, rollout, autopilot, A/B benchmark |
-| [Deployment](docs/guide/deployment.md) | Production setup, CI/CD integration, signing keys, monitoring, security hardening |
-| [Migration](docs/guide/migration.md) | Adding guidance to existing repos with or without prior hook wiring |
-| [API Reference](docs/guide/api-reference.md) | Full API surface: exports, method signatures, types, CLI binaries, changelog |
 
 ---
 

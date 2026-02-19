@@ -31,6 +31,72 @@ const DEFAULT_OPTIONS = {
   authority: DEFAULT_AUTHORITY,
 };
 
+// Null-object factories for disabled components.
+// Each returns an object with the same method signatures as the real subsystem
+// but with no-op implementations that return safe defaults.
+
+function createNullTrustSystem() {
+  return {
+    recordOutcome() {},
+    getAllSnapshots() { return []; },
+    accumulator: {
+      setScore() {},
+      getScore() { return 0.5; },
+    },
+    ledger: {
+      importRecords() {},
+      exportRecords() { return []; },
+    },
+  };
+}
+
+function createNullThreatDetector() {
+  return {
+    analyze() { return { threat: false, severity: 0, signals: [] }; },
+    getThreatHistory() { return []; },
+  };
+}
+
+function createNullCollusionDetector() {
+  return {
+    analyze() { return { detected: false, rings: [] }; },
+    getHistory() { return []; },
+  };
+}
+
+function createNullMemoryQuorum() {
+  return {
+    propose() { return { accepted: true, votes: [] }; },
+    getHistory() { return []; },
+  };
+}
+
+function createNullProofChain() {
+  return {
+    append() { return { envelopeId: 'null-envelope' }; },
+    export() { return { envelopes: [] }; },
+    import() {},
+    verify() { return { valid: true }; },
+  };
+}
+
+function createNullConformanceRunner() {
+  return {
+    run() { return { passed: true, results: [] }; },
+    replay() { return { valid: true }; },
+  };
+}
+
+function createNullEvolutionPipeline() {
+  return {
+    propose() { return { proposalId: 'null-proposal' }; },
+    simulate() { return { passed: true }; },
+    stage() {},
+    advance() {},
+    getProposals() { return []; },
+  };
+}
+
 export class GuidanceAdvancedRuntime {
   constructor(options = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -42,20 +108,35 @@ export class GuidanceAdvancedRuntime {
 
     this.phase1 = createGuidancePhase1Runtime({ rootDir: this.rootDir });
 
-    this.trustSystem = createTrustSystem();
-    this.threatDetector = createThreatDetector();
-    this.collusionDetector = createCollusionDetector({
-      ringMinLength: 3,
-      frequencyThreshold: 5,
-    });
-    this.memoryQuorum = createMemoryQuorum({ threshold: 0.67 });
+    this._enabledComponents = this._loadEnabledComponents();
 
-    this.proofChain = createProofChain({ signingKey: this.options.signingKey });
-    this.evolutionPipeline = createEvolutionPipeline({ signingKey: this.options.signingKey });
-    this.conformanceRunner = createConformanceRunner(
-      this.options.authority,
-      this.options.signingKey
-    );
+    this.trustSystem = this._enabledComponents.has('trust')
+      ? createTrustSystem()
+      : createNullTrustSystem();
+
+    this.threatDetector = this._enabledComponents.has('adversarial')
+      ? createThreatDetector()
+      : createNullThreatDetector();
+
+    this.collusionDetector = this._enabledComponents.has('adversarial')
+      ? createCollusionDetector({ ringMinLength: 3, frequencyThreshold: 5 })
+      : createNullCollusionDetector();
+
+    this.memoryQuorum = this._enabledComponents.has('adversarial')
+      ? createMemoryQuorum({ threshold: 0.67 })
+      : createNullMemoryQuorum();
+
+    this.proofChain = this._enabledComponents.has('proof')
+      ? createProofChain({ signingKey: this.options.signingKey })
+      : createNullProofChain();
+
+    this.evolutionPipeline = this._enabledComponents.has('evolution')
+      ? createEvolutionPipeline({ signingKey: this.options.signingKey })
+      : createNullEvolutionPipeline();
+
+    this.conformanceRunner = this._enabledComponents.has('conformance')
+      ? createConformanceRunner(this.options.authority, this.options.signingKey)
+      : createNullConformanceRunner();
 
     this.initialized = false;
 
@@ -68,6 +149,16 @@ export class GuidanceAdvancedRuntime {
     this.runConformanceIntegration = runners.runConformanceIntegration;
     this.runEvolutionIntegration = runners.runEvolutionIntegration;
     this.runAllIntegrations = () => runAllIntegrations(this);
+  }
+
+  _loadEnabledComponents() {
+    const componentsJsonPath = resolve(this.rootDir, '.claude-flow/guidance/components.json');
+    const saved = readJson(componentsJsonPath, null);
+    if (saved && Array.isArray(saved.components)) {
+      return new Set(saved.components);
+    }
+    // No components.json → all enabled (backwards compat)
+    return new Set(['trust', 'adversarial', 'proof', 'conformance', 'evolution', 'autopilot', 'analysis', 'codex']);
   }
 
   async initialize() {
@@ -124,6 +215,14 @@ export class GuidanceAdvancedRuntime {
     return this.phase1.getBundle()?.constitution?.hash ?? 'unknown-guidance-hash';
   }
 
+  isComponentEnabled(name) {
+    return this._enabledComponents.has(name);
+  }
+
+  getEnabledComponents() {
+    return [...this._enabledComponents].sort();
+  }
+
   recordTrust(agentId, outcome, reason) {
     return this.trustSystem.recordOutcome(agentId, outcome, reason);
   }
@@ -172,6 +271,7 @@ export class GuidanceAdvancedRuntime {
     return {
       initialized: this.initialized,
       guidanceHash: this.getGuidanceHash(),
+      enabledComponents: this.getEnabledComponents(),
       trustAgents: this.trustSystem.getAllSnapshots().length,
       threatSignals: this.threatDetector.getThreatHistory().length,
       proofChainLength: proofExport.envelopes.length,

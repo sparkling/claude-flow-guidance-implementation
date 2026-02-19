@@ -7,6 +7,10 @@ import {
   GUIDANCE_HOOKS_DEFAULTS,
   GUIDANCE_PACKAGE_DEPS,
   GUIDANCE_PACKAGE_SCRIPTS,
+  GUIDANCE_COMPONENTS,
+  GUIDANCE_CORE_SCRIPTS,
+  GUIDANCE_PRESETS,
+  resolveComponents,
 } from './default-settings.mjs';
 import { readJson, ensureDir, writeJson } from './utils.mjs';
 
@@ -104,6 +108,22 @@ function usesCodexMode(mode) {
   return mode === 'both' || mode === 'codex';
 }
 
+function getAllowedScripts(components, targetMode) {
+  const allowed = new Set(GUIDANCE_CORE_SCRIPTS);
+  const mode = normalizeTargetMode(targetMode);
+  for (const name of components) {
+    const comp = GUIDANCE_COMPONENTS[name];
+    if (!comp) continue;
+    for (const script of comp.scripts) {
+      // Skip codex scripts if codex component is selected but mode doesn't include codex
+      const isCodexScript = script.startsWith('guidance:codex:');
+      if (isCodexScript && !usesCodexMode(mode)) continue;
+      allowed.add(script);
+    }
+  }
+  return allowed;
+}
+
 function writeText(path, value) {
   ensureDir(dirname(path));
   writeFileSync(path, value);
@@ -177,6 +197,9 @@ export function installIntoRepo({
   force = false,
   installDeps = false,
   targetMode = 'both',
+  components,
+  preset,
+  exclude,
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -184,6 +207,24 @@ export function installIntoRepo({
   if (!existsSync(target)) {
     throw new Error(`Target repo does not exist: ${target}`);
   }
+
+  // Resolve enabled components.
+  // If components.json exists and no explicit selection given, read it back.
+  const componentsJsonPath = resolve(target, '.claude-flow/guidance/components.json');
+  let resolvedComponents;
+  if (!components && !preset && !exclude) {
+    const saved = readJson(componentsJsonPath, null);
+    if (saved && Array.isArray(saved.components)) {
+      resolvedComponents = saved.components;
+    } else {
+      // Programmatic default: 'full' for backwards compat
+      resolvedComponents = resolveComponents({ preset: 'full' });
+    }
+  } else {
+    resolvedComponents = resolveComponents({ components, exclude, preset });
+  }
+  const resolvedSet = new Set(resolvedComponents);
+  const allowedScripts = getAllowedScripts(resolvedComponents, mode);
 
   // Write thin hook-handler shim (delegates to the npm package).
   const shimPath = resolve(target, '.claude/helpers/hook-handler.cjs');
@@ -210,8 +251,7 @@ export function installIntoRepo({
   packageJson.type = packageJson.type || 'module';
   packageJson.scripts = packageJson.scripts || {};
   for (const [name, cmd] of Object.entries(GUIDANCE_PACKAGE_SCRIPTS)) {
-    const isCodexScript = name.startsWith('guidance:codex:');
-    if (isCodexScript && !usesCodexMode(mode)) continue;
+    if (!allowedScripts.has(name)) continue;
     if (force || !(name in packageJson.scripts)) {
       packageJson.scripts[name] = cmd;
     }
@@ -249,7 +289,7 @@ export function installIntoRepo({
   let codexConfigAdded = false;
   let codexAgentsDocAdded = false;
 
-  if (usesCodexMode(mode)) {
+  if (usesCodexMode(mode) && resolvedSet.has('codex')) {
     agentsConfigPath = resolve(target, '.agents/config.toml');
     codexConfigAdded = appendBlockIfMissing(
       agentsConfigPath,
@@ -265,6 +305,17 @@ export function installIntoRepo({
       '# Project\n\n'
     );
   }
+
+  // Persist component selection for future re-runs and runtime consumption.
+  const componentsJson = {
+    version: 1,
+    preset: preset || (components ? null : 'full'),
+    components: resolvedComponents,
+    installedAt: new Date().toISOString(),
+  };
+  const cfGuidanceDir = resolve(target, '.claude-flow/guidance');
+  ensureDir(cfGuidanceDir);
+  writeJson(componentsJsonPath, componentsJson);
 
   // Ensure local guidance file and gitignore entries.
   writeMissingStub(
@@ -417,6 +468,9 @@ export function initRepo({
   dual = true,
   skipCfInit = false,
   verify = true,
+  components,
+  preset,
+  exclude,
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -458,6 +512,9 @@ export function initRepo({
     force,
     installDeps,
     targetMode: mode,
+    components,
+    preset,
+    exclude,
   });
 
   let verifyReport = null;

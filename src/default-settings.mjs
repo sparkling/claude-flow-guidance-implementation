@@ -115,3 +115,107 @@ export const GUIDANCE_PACKAGE_SCRIPTS = {
 export const GUIDANCE_PACKAGE_DEPS = {
   'claude-flow-guidance-implementation': '^0.2.0',
 };
+
+export const GUIDANCE_COMPONENTS = {
+  trust: {
+    label: 'Trust System',
+    description: 'Per-agent trust scoring with privilege tiers',
+    scripts: ['guidance:trust'],
+    runtimeSubsystems: ['trustSystem'],
+  },
+  adversarial: {
+    label: 'Adversarial Detection',
+    description: 'Prompt injection detection, collusion detection, and memory quorum',
+    scripts: ['guidance:adversarial'],
+    runtimeSubsystems: ['threatDetector', 'collusionDetector', 'memoryQuorum'],
+  },
+  proof: {
+    label: 'Proof Chain',
+    description: 'HMAC-SHA256 hash-chained cryptographic proof chain',
+    scripts: ['guidance:proof'],
+    runtimeSubsystems: ['proofChain'],
+  },
+  conformance: {
+    label: 'Conformance Testing',
+    description: 'Memory Clerk acceptance testing with replay verification',
+    scripts: ['guidance:conformance'],
+    runtimeSubsystems: ['conformanceRunner'],
+  },
+  evolution: {
+    label: 'Rule Evolution',
+    description: 'Propose, simulate, stage, and rollout rule changes',
+    scripts: ['guidance:evolution'],
+    runtimeSubsystems: ['evolutionPipeline'],
+  },
+  autopilot: {
+    label: 'Autopilot & Benchmarking',
+    description: 'One-shot and daemon-mode CLAUDE.md rule optimization with A/B benchmarking',
+    scripts: ['guidance:optimize', 'guidance:autopilot:once', 'guidance:autopilot:daemon', 'guidance:ab-benchmark'],
+    runtimeSubsystems: [],
+  },
+  analysis: {
+    label: 'Analysis & Scaffolding',
+    description: 'Policy analysis scoring and project scaffolding',
+    scripts: ['guidance:analyze', 'guidance:scaffold'],
+    runtimeSubsystems: [],
+  },
+  codex: {
+    label: 'Codex Bridge',
+    description: 'OpenAI Codex lifecycle bridge for equivalent guidance enforcement',
+    scripts: [
+      'guidance:codex:status',
+      'guidance:codex:pre-command',
+      'guidance:codex:pre-edit',
+      'guidance:codex:pre-task',
+      'guidance:codex:post-edit',
+      'guidance:codex:post-task',
+      'guidance:codex:session-start',
+      'guidance:codex:session-end',
+    ],
+    runtimeSubsystems: [],
+  },
+};
+
+export const GUIDANCE_CORE_SCRIPTS = [
+  'guidance:status',
+  'guidance:all',
+  'guidance:hooks',
+  'guidance:runtime',
+];
+
+export const GUIDANCE_PRESETS = {
+  minimal: [],
+  standard: ['trust', 'proof', 'analysis'],
+  full: ['trust', 'adversarial', 'proof', 'conformance', 'evolution', 'autopilot', 'analysis', 'codex'],
+};
+
+export function resolveComponents({ components, exclude, preset } = {}) {
+  const validNames = Object.keys(GUIDANCE_COMPONENTS);
+
+  let resolved;
+  if (Array.isArray(components)) {
+    for (const name of components) {
+      if (!validNames.includes(name)) {
+        throw new Error(`Unknown component: ${name}. Valid components: ${validNames.join(', ')}`);
+      }
+    }
+    resolved = [...components];
+  } else {
+    const presetName = preset || 'standard';
+    if (!(presetName in GUIDANCE_PRESETS)) {
+      throw new Error(`Unknown preset: ${presetName}. Valid presets: ${Object.keys(GUIDANCE_PRESETS).join(', ')}`);
+    }
+    resolved = [...GUIDANCE_PRESETS[presetName]];
+  }
+
+  if (Array.isArray(exclude)) {
+    for (const name of exclude) {
+      if (!validNames.includes(name)) {
+        throw new Error(`Unknown component in exclude list: ${name}. Valid components: ${validNames.join(', ')}`);
+      }
+    }
+    resolved = resolved.filter((name) => !exclude.includes(name));
+  }
+
+  return resolved.sort();
+}

@@ -103,6 +103,68 @@ describe('installIntoRepo', () => {
     expect(settings.hooks.SessionEnd).toBeDefined();
   });
 
+  it('deduplicates hooks when relative and $CLAUDE_PROJECT_DIR paths coexist', () => {
+    // Simulate a repo that already has hooks with relative paths
+    const settingsPath = resolve(tmpDir, '.claude/settings.json');
+    mkdirSync(resolve(tmpDir, '.claude'), { recursive: true });
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {},
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Bash',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node .claude/helpers/hook-handler.cjs pre-bash',
+                  timeout: 5000,
+                },
+              ],
+            },
+          ],
+          SessionStart: [
+            {
+              matcher: '',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node .claude/helpers/hook-handler.cjs session-restore',
+                  timeout: 15000,
+                  continueOnError: true,
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+
+    installIntoRepo({ targetRepo: tmpDir, targetMode: 'claude' });
+
+    const settings = readJson(settingsPath);
+
+    // PreToolUse Bash matcher should have exactly one hook-handler hook, not two
+    const bashBlock = settings.hooks.PreToolUse.find((b) => b.matcher === 'Bash');
+    expect(bashBlock).toBeDefined();
+    const handlerHooks = bashBlock.hooks.filter((h) =>
+      h.command.includes('hook-handler.cjs pre-bash')
+    );
+    expect(handlerHooks).toHaveLength(1);
+    // The surviving hook should use $CLAUDE_PROJECT_DIR
+    expect(handlerHooks[0].command).toContain('$CLAUDE_PROJECT_DIR');
+
+    // SessionStart should also have exactly one hook-handler hook
+    const sessionBlock = settings.hooks.SessionStart.find((b) => b.matcher === '');
+    expect(sessionBlock).toBeDefined();
+    const sessionHooks = sessionBlock.hooks.filter((h) =>
+      h.command.includes('hook-handler.cjs session-restore')
+    );
+    expect(sessionHooks).toHaveLength(1);
+    expect(sessionHooks[0].command).toContain('$CLAUDE_PROJECT_DIR');
+  });
+
   it('creates .agents/config.toml with guidance block for codex mode', () => {
     installIntoRepo({ targetRepo: tmpDir, targetMode: 'codex' });
 

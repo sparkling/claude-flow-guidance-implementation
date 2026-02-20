@@ -1,6 +1,6 @@
 {
   "name": "@sparkleideas/claude-flow-guidance",
-  "version": "3.0.0-alpha.1.wrapper.2",
+  "version": "3.0.0-alpha.1.wrapper.3",
   "description": "Implementation kit for wiring @claude-flow/guidance into Claude Code and Codex repos with hook automation",
   "type": "module",
   "private": false,

@@ -134,6 +134,27 @@ function sameMatcher(a, b) {
   return String(a ?? '') === String(b ?? '');
 }
 
+/**
+ * Normalize a hook-handler command for deduplication.
+ * Strips path prefix variations so that both relative and $CLAUDE_PROJECT_DIR
+ * forms resolve to the same identity string.
+ *
+ *   'node .claude/helpers/hook-handler.cjs pre-bash'
+ *   'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash'
+ *
+ * Both normalize to: 'node .claude/helpers/hook-handler.cjs pre-bash'
+ */
+function normalizeHookCommand(cmd) {
+  return String(cmd || '').replace(
+    /node\s+(?:"[^"]*"\/)?(?:\.\/)?\.claude\/helpers\/hook-handler\.cjs/,
+    'node .claude/helpers/hook-handler.cjs'
+  );
+}
+
+function sameHookCommand(a, b) {
+  return a === b || normalizeHookCommand(a) === normalizeHookCommand(b);
+}
+
 function mergeHookBlocks(existingBlocks, incomingBlocks) {
   const blocks = Array.isArray(existingBlocks) ? [...existingBlocks] : [];
   for (const incoming of incomingBlocks) {
@@ -146,10 +167,15 @@ function mergeHookBlocks(existingBlocks, incomingBlocks) {
     const current = blocks[index];
     const currentHooks = Array.isArray(current.hooks) ? [...current.hooks] : [];
     for (const incomingHook of incoming.hooks ?? []) {
-      const exists = currentHooks.some(
-        (hook) => hook.type === incomingHook.type && hook.command === incomingHook.command
+      const existingIndex = currentHooks.findIndex(
+        (hook) => hook.type === incomingHook.type && sameHookCommand(hook.command, incomingHook.command)
       );
-      if (!exists) currentHooks.push(incomingHook);
+      if (existingIndex < 0) {
+        currentHooks.push(incomingHook);
+      } else {
+        // Replace existing hook with incoming (upgrades relative path to $CLAUDE_PROJECT_DIR form)
+        currentHooks[existingIndex] = incomingHook;
+      }
     }
 
     blocks[index] = { ...current, hooks: currentHooks };

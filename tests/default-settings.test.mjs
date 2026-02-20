@@ -34,15 +34,14 @@ describe('GUIDANCE_ENV_DEFAULTS', () => {
 // GUIDANCE_HOOKS_DEFAULTS
 // ---------------------------------------------------------------------------
 describe('GUIDANCE_HOOKS_DEFAULTS', () => {
-  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd, Compact keys', () => {
+  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd keys', () => {
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PostToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionStart');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionEnd');
-    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('Compact');
   });
 
-  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd', 'Compact'];
+  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd'];
 
   for (const category of hookCategories) {
     describe(`${category}`, () => {
@@ -172,13 +171,12 @@ describe('buildHookDefaults', () => {
     }
   });
 
-  it('includes Compact hooks', () => {
+  it('does not include invalid hook event keys', () => {
     const defaults = buildHookDefaults();
-    expect(defaults).toHaveProperty('Compact');
-    expect(defaults.Compact).toHaveLength(2);
-    expect(defaults.Compact[0].matcher).toBe('manual');
-    expect(defaults.Compact[0].hooks[0].command).toContain('compact-manual');
-    expect(defaults.Compact[1].matcher).toBe('');
-    expect(defaults.Compact[1].hooks[0].command).toContain('compact-auto');
+    const validEvents = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop',
+      'SubagentStop', 'SubagentStart', 'SessionStart', 'SessionEnd', 'Notification'];
+    for (const key of Object.keys(defaults)) {
+      expect(validEvents).toContain(key);
+    }
   });
 });

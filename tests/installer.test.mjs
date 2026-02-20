@@ -134,7 +134,7 @@ describe('installIntoRepo CLI flag overrides', () => {
     }
   });
 
-  it('settings.json contains Compact hook entries', async () => {
+  it('settings.json only contains valid Claude Code hook event keys', async () => {
     const dir = makeTempRepo();
     await installIntoRepo({
       targetRepo: dir,
@@ -142,9 +142,11 @@ describe('installIntoRepo CLI flag overrides', () => {
       preset: 'minimal',
     });
     const settings = readSettings(dir);
-    expect(settings.hooks).toHaveProperty('Compact');
-    expect(settings.hooks.Compact).toHaveLength(2);
-    expect(settings.hooks.Compact[0].matcher).toBe('manual');
-    expect(settings.hooks.Compact[1].matcher).toBe('');
+    const validEvents = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop',
+      'SubagentStop', 'SubagentStart', 'SessionStart', 'SessionEnd', 'Notification'];
+    for (const key of Object.keys(settings.hooks)) {
+      expect(validEvents).toContain(key);
+    }
+    expect(settings.hooks).not.toHaveProperty('Compact');
   });
 });

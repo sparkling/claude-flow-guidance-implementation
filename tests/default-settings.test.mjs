@@ -131,11 +131,11 @@ describe('GUIDANCE_PACKAGE_SCRIPTS', () => {
 // ---------------------------------------------------------------------------
 describe('GUIDANCE_PACKAGE_DEPS', () => {
   it('declares the implementation package', () => {
-    expect(GUIDANCE_PACKAGE_DEPS).toHaveProperty('claude-flow-guidance-implementation');
+    expect(GUIDANCE_PACKAGE_DEPS).toHaveProperty('@sparkleideas/claude-flow-guidance');
   });
 
   it('uses a semver range string', () => {
-    const version = GUIDANCE_PACKAGE_DEPS['claude-flow-guidance-implementation'];
+    const version = GUIDANCE_PACKAGE_DEPS['@sparkleideas/claude-flow-guidance'];
     expect(typeof version).toBe('string');
     expect(version.length).toBeGreaterThan(0);
   });

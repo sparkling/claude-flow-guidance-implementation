@@ -1,6 +1,6 @@
 {
-  "name": "claude-flow-guidance-implementation",
-  "version": "3.0.0-alpha.1.wrapper.1",
+  "name": "@sparkleideas/claude-flow-guidance",
+  "version": "3.0.0-alpha.1.wrapper.2",
   "description": "Implementation kit for wiring @claude-flow/guidance into Claude Code and Codex repos with hook automation",
   "type": "module",
   "private": false,
@@ -52,20 +52,14 @@
     "LICENSE"
   ],
   "bin": {
-    "cf-guidance-impl": "bin/cf-guidance-impl.mjs",
-    "cf-guidance": "src/cli/guidance-integrations.js",
-    "cf-guidance-runtime": "src/cli/guidance-runtime.js",
-    "cf-guidance-autopilot": "src/cli/guidance-autopilot.js",
-    "cf-guidance-benchmark": "src/cli/guidance-ab-benchmark.js",
-    "cf-guidance-codex": "src/cli/guidance-codex-bridge.js",
-    "cf-guidance-analyze": "src/cli/analyze-guidance.js",
-    "cf-guidance-scaffold": "src/cli/scaffold-guidance.js"
+    "cf-guidance": "bin/guidance.mjs",
+    "cf-guidance-impl": "bin/guidance.mjs"
   },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "node ./bin/cf-guidance-impl.mjs verify --target .",
+    "lint": "node ./bin/guidance.mjs verify --target .",
     "swarm:init": "npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized",
     "swarm:route": "npx @claude-flow/cli@latest hooks route --task \"implement reusable guidance integration kit\""
   },

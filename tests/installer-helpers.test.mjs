@@ -39,7 +39,7 @@ describe('installIntoRepo', () => {
     expect(existsSync(shimPath)).toBe(true);
 
     const content = readFileSync(shimPath, 'utf-8');
-    expect(content).toContain('claude-flow-guidance-implementation/hook-handler');
+    expect(content).toContain('@sparkleideas/claude-flow-guidance/hook-handler');
   });
 
   it('creates package.json with guidance scripts when none exists', () => {
@@ -50,8 +50,8 @@ describe('installIntoRepo', () => {
 
     const pkg = readJson(pkgPath);
     expect(pkg.scripts).toBeDefined();
-    expect(pkg.scripts['guidance:analyze']).toBe('cf-guidance-analyze');
-    expect(pkg.scripts['guidance:status']).toBe('cf-guidance status');
+    expect(pkg.scripts['guidance:analyze']).toBe('cf-guidance analyze');
+    expect(pkg.scripts['guidance:status']).toBe('cf-guidance run status');
   });
 
   it('merges scripts into existing package.json without overwriting', () => {
@@ -73,15 +73,15 @@ describe('installIntoRepo', () => {
     // Pre-existing script must be preserved
     expect(pkg.scripts.start).toBe('node index.js');
     // New guidance scripts should be added
-    expect(pkg.scripts['guidance:status']).toBe('cf-guidance status');
+    expect(pkg.scripts['guidance:status']).toBe('cf-guidance run status');
   });
 
-  it('adds claude-flow-guidance-implementation dependency', () => {
+  it('adds @sparkleideas/claude-flow-guidance dependency', () => {
     installIntoRepo({ targetRepo: tmpDir });
 
     const pkg = readJson(resolve(tmpDir, 'package.json'));
     expect(pkg.dependencies).toBeDefined();
-    expect(pkg.dependencies['claude-flow-guidance-implementation']).toBe('^0.2.0');
+    expect(pkg.dependencies['@sparkleideas/claude-flow-guidance']).toBe('^3.0.0-alpha.1');
   });
 
   it('creates .claude/settings.json with hooks and env for claude mode', () => {
@@ -198,7 +198,7 @@ describe('verifyRepo', () => {
       resolve(tmpDir, 'package.json'),
       JSON.stringify({
         name: 'test',
-        dependencies: { 'claude-flow-guidance-implementation': '^0.2.0' },
+        dependencies: { '@sparkleideas/claude-flow-guidance': '^3.0.0-alpha.1' },
       })
     );
     writeFileSync(

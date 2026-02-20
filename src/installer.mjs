@@ -190,7 +190,7 @@ const HOOK_HANDLER_SHIM = `#!/usr/bin/env node
 // Thin shim — delegates to the full hook-handler in the npm package.
 // This file is kept local so Claude Code's hook config can reference it by path.
 process.env.__GUIDANCE_HELPERS_DIR = process.env.__GUIDANCE_HELPERS_DIR || __dirname;
-require('claude-flow-guidance-implementation/hook-handler');
+require('@sparkleideas/claude-flow-guidance/hook-handler');
 `;
 
 export async function installIntoRepo({
@@ -436,11 +436,11 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
 
   // Verify the package dependency is declared (skip when verifying the package itself).
   const packageJson = readJson(resolve(target, 'package.json'), {});
-  const isSelf = packageJson.name === 'claude-flow-guidance-implementation';
+  const isSelf = packageJson.name === '@sparkleideas/claude-flow-guidance';
   if (!isSelf) {
     const deps = packageJson.dependencies || {};
-    const hasImplDep = 'claude-flow-guidance-implementation' in deps;
-    checks.push({ path: 'dependency:claude-flow-guidance-implementation', exists: hasImplDep });
+    const hasImplDep = '@sparkleideas/claude-flow-guidance' in deps;
+    checks.push({ path: 'dependency:@sparkleideas/claude-flow-guidance', exists: hasImplDep });
   }
 
   // Check .js/.cjs compat pairs exist for helper modules.
@@ -479,7 +479,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   if (usesCodexMode(mode)) {
     smokeCodex = run(
       'node',
-      ['-e', 'import("claude-flow-guidance-implementation/hook-handler")'],
+      ['-e', 'import("@sparkleideas/claude-flow-guidance/hook-handler")'],
       target
     );
   }
@@ -587,7 +587,7 @@ export async function initRepo({
     verifyReport = verifyRepo({ targetRepo: target, targetMode: mode });
     if (!verifyReport.passed) {
       throw new Error(
-        `Guidance wiring verification failed in ${target}. Run cf-guidance-impl verify --target ${target} for details.`
+        `Guidance wiring verification failed in ${target}. Run cf-guidance verify --target ${target} for details.`
       );
     }
   }

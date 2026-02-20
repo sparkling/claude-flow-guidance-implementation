@@ -3,9 +3,9 @@ import { initRepo, installIntoRepo, verifyRepo } from '../src/installer.mjs';
 
 function usage() {
   console.log(`Usage:
-  cf-guidance-impl init --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
-  cf-guidance-impl install --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
-  cf-guidance-impl verify --target <repoPath> [--target-mode both|claude|codex]
+  cf-guidance init --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
+  cf-guidance install --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
+  cf-guidance verify --target <repoPath> [--target-mode both|claude|codex]
 `);
 }
 

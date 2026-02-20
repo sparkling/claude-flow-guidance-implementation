@@ -90,6 +90,28 @@ export function buildHookDefaults(hookTimeout = 5000) {
         ],
       },
     ],
+    PreCompact: [
+      {
+        matcher: 'manual',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-manual',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+      {
+        matcher: 'auto',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-auto',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
   };
 }
 

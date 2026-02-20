@@ -142,11 +142,13 @@ describe('installIntoRepo CLI flag overrides', () => {
       preset: 'minimal',
     });
     const settings = readSettings(dir);
-    const validEvents = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop',
-      'SubagentStop', 'SubagentStart', 'SessionStart', 'SessionEnd', 'Notification'];
+    const validEvents = ['Setup', 'PreToolUse', 'PermissionRequest', 'PostToolUse',
+      'PostToolUseFailure', 'UserPromptSubmit', 'Stop', 'SubagentStop', 'SubagentStart',
+      'SessionStart', 'SessionEnd', 'Notification', 'PreCompact'];
     for (const key of Object.keys(settings.hooks)) {
       expect(validEvents).toContain(key);
     }
     expect(settings.hooks).not.toHaveProperty('Compact');
+    expect(settings.hooks).toHaveProperty('PreCompact');
   });
 });

@@ -34,14 +34,15 @@ describe('GUIDANCE_ENV_DEFAULTS', () => {
 // GUIDANCE_HOOKS_DEFAULTS
 // ---------------------------------------------------------------------------
 describe('GUIDANCE_HOOKS_DEFAULTS', () => {
-  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd keys', () => {
+  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd, PreCompact keys', () => {
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PostToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionStart');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionEnd');
+    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreCompact');
   });
 
-  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd'];
+  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd', 'PreCompact'];
 
   for (const category of hookCategories) {
     describe(`${category}`, () => {
@@ -171,12 +172,23 @@ describe('buildHookDefaults', () => {
     }
   });
 
-  it('does not include invalid hook event keys', () => {
+  it('only uses valid Claude Code hook event keys', () => {
     const defaults = buildHookDefaults();
-    const validEvents = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop',
-      'SubagentStop', 'SubagentStart', 'SessionStart', 'SessionEnd', 'Notification'];
+    const validEvents = ['Setup', 'PreToolUse', 'PermissionRequest', 'PostToolUse',
+      'PostToolUseFailure', 'UserPromptSubmit', 'Stop', 'SubagentStop', 'SubagentStart',
+      'SessionStart', 'SessionEnd', 'Notification', 'PreCompact'];
     for (const key of Object.keys(defaults)) {
       expect(validEvents).toContain(key);
     }
+  });
+
+  it('includes PreCompact hooks with manual and auto matchers', () => {
+    const defaults = buildHookDefaults();
+    expect(defaults).toHaveProperty('PreCompact');
+    expect(defaults.PreCompact).toHaveLength(2);
+    expect(defaults.PreCompact[0].matcher).toBe('manual');
+    expect(defaults.PreCompact[0].hooks[0].command).toContain('compact-manual');
+    expect(defaults.PreCompact[1].matcher).toBe('auto');
+    expect(defaults.PreCompact[1].hooks[0].command).toContain('compact-auto');
   });
 });

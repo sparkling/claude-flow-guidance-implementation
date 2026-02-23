@@ -66,6 +66,30 @@ export function buildHookDefaults(hookTimeout = 5000) {
         ],
       },
     ],
+    PostToolUseFailure: [
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-tool-failure',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    UserPromptSubmit: [
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs user-prompt',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
     SessionStart: [
       {
         matcher: '',
@@ -85,6 +109,18 @@ export function buildHookDefaults(hookTimeout = 5000) {
           {
             type: 'command',
             command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-end',
+            timeout: hookTimeout,
+          },
+        ],
+      },
+    ],
+    Stop: [
+      {
+        matcher: '',
+        hooks: [
+          {
+            type: 'command',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs stop',
             timeout: hookTimeout,
           },
         ],

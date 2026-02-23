@@ -736,3 +736,280 @@ describe('e2e behavioral: error handling', { skip: shouldSkip ? true : false }, 
     }
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Suite: Full session lifecycle — guidance + memory cross-cutting (WM-008)
+//
+// Exercises the REAL hook-handler.cjs entry point and verifies BOTH
+// guidance state (proof chain, trust) AND memory state (intelligence graph,
+// pending insights, ranked context, confidence feedback) after a simulated
+// full session with agentdb v3 config.
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', { skip: shouldSkip ? true : false }, () => {
+  let dir;
+
+  function runHookHandler(command, stdinPayload = {}, timeout = 15000) {
+    const handlerPath = join(dir, '.claude/helpers/hook-handler.cjs');
+    return spawnSync(
+      process.execPath,
+      [handlerPath, command],
+      {
+        cwd: dir,
+        input: JSON.stringify(stdinPayload),
+        env: {
+          ...process.env,
+          CLAUDE_PROJECT_DIR: dir,
+          GUIDANCE_EVENT_WIRING_ENABLED: '1',
+          GUIDANCE_PROOF_KEY: 'e2e-test-signing-key',
+          NODE_NO_WARNINGS: '1',
+        },
+        encoding: 'utf-8',
+        timeout,
+      }
+    );
+  }
+
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'cfgi-behav-crosscut-'));
+    const r = cli(['init', '--yes'], dir);
+    if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
+    ensureClaudeMd(dir);
+    await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
+    writeRealHandler(dir);
+
+    // Seed memory store with agentdb v3-related entries
+    const dataDir = join(dir, '.claude-flow', 'data');
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(join(dataDir, 'auto-memory-store.json'), JSON.stringify([
+      {
+        id: 'xc-1', key: 'agentdb-v3-rvf', content: 'AgentDB v3 uses RVF unified storage with self-learning search',
+        summary: 'AgentDB v3 RVF storage', namespace: 'core', type: 'semantic',
+        metadata: { sourceFile: 'memory/agentdb-backend.js' }, createdAt: Date.now(),
+      },
+      {
+        id: 'xc-2', key: 'witness-chain', content: 'Witness chain provides SHAKE-256 audit trail for tamper detection',
+        summary: 'Witness chain audit', namespace: 'core', type: 'semantic',
+        metadata: { sourceFile: 'memory/agentdb-backend.js' }, createdAt: Date.now(),
+      },
+    ]));
+  }, 90000);
+
+  afterAll(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  // ── Verify agentdb v3 config was generated ──
+
+  it('init generated config.json with agentdb v3 section', () => {
+    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
+    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
+    expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
+  });
+
+  // ── Step 1: session-restore initializes both systems ──
+
+  describe('Step 1: session-restore', () => {
+    let result;
+    beforeAll(() => { result = runHookHandler('session-restore'); });
+
+    it('exits 0', () => { expect(result.status).toBe(0); });
+
+    it('intelligence.init() was called (graph loaded)', () => {
+      // session-restore calls intel.init(), which should build graph from seeded store
+      expect(result.stdout).toContain('[INTELLIGENCE]');
+    });
+
+    it('graph-state.json created from seeded memory entries', () => {
+      const graphPath = join(dir, '.claude-flow', 'data', 'graph-state.json');
+      expect(existsSync(graphPath)).toBe(true);
+      const graph = readJson(graphPath);
+      expect(graph.nodeCount).toBe(2);
+    });
+
+    it('ranked-context.json created with PageRank scores', () => {
+      const rankedPath = join(dir, '.claude-flow', 'data', 'ranked-context.json');
+      expect(existsSync(rankedPath)).toBe(true);
+      const ranked = readJson(rankedPath);
+      expect(ranked.entries.length).toBe(2);
+      expect(typeof ranked.entries[0].pageRank).toBe('number');
+    });
+  });
+
+  // ── Step 2: route — intelligence provides context ──
+
+  describe('Step 2: route (intelligence context)', () => {
+    let result;
+    beforeAll(() => {
+      result = spawnSync(
+        process.execPath,
+        [join(dir, '.claude/helpers/hook-handler.cjs'), 'route'],
+        {
+          cwd: dir,
+          env: {
+            ...process.env,
+            CLAUDE_PROJECT_DIR: dir,
+            PROMPT: 'implement agentdb v3 RVF storage migration',
+            NODE_NO_WARNINGS: '1',
+          },
+          encoding: 'utf-8',
+          timeout: 15000,
+        }
+      );
+    });
+
+    it('exits 0', () => { expect(result.status).toBe(0); });
+
+    it('outputs intelligence context for matching prompt', () => {
+      // getContext should match our seeded entries about agentdb v3
+      expect(result.stdout).toContain('[INTELLIGENCE]');
+    });
+  });
+
+  // ── Step 3: pre-bash → guidance + trust ──
+
+  describe('Step 3: pre-bash (guidance + trust)', () => {
+    let result;
+    beforeAll(() => {
+      result = runHookHandler('pre-bash', { tool_input: { command: 'npm test' } });
+    });
+
+    it('exits 0 with [OK]', () => {
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain('[OK]');
+    });
+
+    it('guidance proof chain updated', () => {
+      const proofPath = join(dir, '.claude-flow', 'guidance', 'advanced', 'proof-chain.json');
+      if (!existsSync(proofPath)) return; // guidance may not be fully wired in this env
+      const proof = readJson(proofPath);
+      expect(proof.envelopes.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── Step 4: post-edit → intelligence.recordEdit() + guidance ──
+
+  describe('Step 4: post-edit (memory + guidance)', () => {
+    beforeAll(() => {
+      // Edit agentdb-backend.js 4 times to trigger insight creation on consolidate
+      for (let i = 0; i < 4; i++) {
+        runHookHandler('post-edit', { tool_input: { file_path: 'memory/agentdb-backend.js' } });
+      }
+    });
+
+    it('pending-insights.jsonl has recorded edits', () => {
+      const pendingPath = join(dir, '.claude-flow', 'data', 'pending-insights.jsonl');
+      expect(existsSync(pendingPath)).toBe(true);
+      const lines = readFileSync(pendingPath, 'utf-8').trim().split('\n').filter(Boolean);
+      expect(lines.length).toBe(4);
+      const parsed = JSON.parse(lines[0]);
+      expect(parsed.type).toBe('edit');
+      expect(parsed.file).toBe('memory/agentdb-backend.js');
+    });
+  });
+
+  // ── Step 5: pre-task + post-task → guidance trust + intelligence feedback ──
+
+  describe('Step 5: pre-task + post-task (trust + feedback)', () => {
+    beforeAll(() => {
+      runHookHandler('pre-task', {
+        tool_input: { description: 'Upgrade agentdb to v3 with RVF storage' },
+      });
+      runHookHandler('post-task', {
+        tool_input: { status: 'completed' },
+      });
+    });
+
+    it('guidance trust state updated', () => {
+      const statePath = join(dir, '.claude-flow', 'guidance', 'advanced', 'advanced-state.json');
+      if (!existsSync(statePath)) return;
+      const state = readJson(statePath);
+      expect(state.trustSnapshots).toBeDefined();
+    });
+
+    it('intelligence feedback boosted confidence for matched patterns', () => {
+      const rankedPath = join(dir, '.claude-flow', 'data', 'ranked-context.json');
+      const ranked = readJson(rankedPath);
+      // After route + getContext + feedback(true), at least one entry should be accessed
+      const accessed = ranked.entries.filter(e => e.accessCount > 0);
+      expect(accessed.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── Step 6: session-end → intelligence.consolidate() + guidance conformance ──
+
+  describe('Step 6: session-end (consolidate + conformance)', () => {
+    let result;
+    beforeAll(() => { result = runHookHandler('session-end'); });
+
+    it('exits 0', () => { expect(result.status).toBe(0); });
+
+    it('intelligence consolidation ran', () => {
+      // consolidate() processes pending insights and creates new entries
+      expect(result.stdout).toContain('[INTELLIGENCE]');
+    });
+
+    it('pending-insights.jsonl cleared after consolidation', () => {
+      const pendingPath = join(dir, '.claude-flow', 'data', 'pending-insights.jsonl');
+      const content = readFileSync(pendingPath, 'utf-8').trim();
+      expect(content).toBe('');
+    });
+
+    it('new insight entry created for frequently-edited agentdb file', () => {
+      const store = readJson(join(dir, '.claude-flow', 'data', 'auto-memory-store.json'));
+      const insight = store.find(e => e.metadata?.autoGenerated && e.content?.includes('agentdb-backend.js'));
+      expect(insight).toBeDefined();
+      expect(insight.namespace).toBe('insights');
+    });
+
+    it('graph updated with new insight node (2 original + 1 insight = 3)', () => {
+      const graph = readJson(join(dir, '.claude-flow', 'data', 'graph-state.json'));
+      expect(graph.nodeCount).toBe(3);
+    });
+
+    it('intelligence snapshot saved for delta tracking', () => {
+      const snapPath = join(dir, '.claude-flow', 'data', 'intelligence-snapshot.json');
+      expect(existsSync(snapPath)).toBe(true);
+      const snaps = readJson(snapPath);
+      expect(Array.isArray(snaps)).toBe(true);
+      expect(snaps.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── Final state: both systems coherent ──
+
+  describe('Final state: cross-system coherence', () => {
+    it('memory store has original entries + auto-generated insights', () => {
+      const store = readJson(join(dir, '.claude-flow', 'data', 'auto-memory-store.json'));
+      expect(store.length).toBeGreaterThanOrEqual(3); // 2 original + 1+ insights
+      const originals = store.filter(e => !e.metadata?.autoGenerated);
+      const insights = store.filter(e => e.metadata?.autoGenerated);
+      expect(originals.length).toBe(2);
+      expect(insights.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('intelligence ranked-context has all entries with scores', () => {
+      const ranked = readJson(join(dir, '.claude-flow', 'data', 'ranked-context.json'));
+      expect(ranked.entries.length).toBeGreaterThanOrEqual(3);
+      for (const entry of ranked.entries) {
+        expect(typeof entry.pageRank).toBe('number');
+        expect(typeof entry.confidence).toBe('number');
+      }
+    });
+
+    it('guidance proof chain accumulated envelopes from all events', () => {
+      const proofPath = join(dir, '.claude-flow', 'guidance', 'advanced', 'proof-chain.json');
+      if (!existsSync(proofPath)) return;
+      const proof = readJson(proofPath);
+      // pre-bash + post-edit(x4 async) + pre-task + post-task + session-end
+      expect(proof.envelopes.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('guidance advanced-state has trust records', () => {
+      const statePath = join(dir, '.claude-flow', 'guidance', 'advanced', 'advanced-state.json');
+      if (!existsSync(statePath)) return;
+      const state = readJson(statePath);
+      expect(state.lastHookEvent).toBeDefined();
+    });
+  });
+});

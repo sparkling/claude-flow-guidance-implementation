@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "preset": "standard",
+  "components": [
+    "analysis",
+    "proof",
+    "trust"
+  ],
+  "installedAt": "2026-02-23T14:00:18.679Z"
+}

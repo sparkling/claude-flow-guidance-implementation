@@ -96,18 +96,16 @@ function validateNamespace(ns, operation) {
 
 function getConfigThresholds() {
   const defaults = { minThreshold: 0.05, alpha: 0.6, decayRate: 0.005 };
-  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.yaml');
+  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.json');
   if (!fs.existsSync(cfgPath)) return defaults;
   try {
-    const content = fs.readFileSync(cfgPath, 'utf-8');
-    const getVal = (key) => {
-      const m = content.match(new RegExp(key + ':\\s*([\\d.]+)'));
-      return m ? parseFloat(m[1]) : null;
-    };
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+    const mem = cfg.memory || {};
+    const lb = mem.learningBridge || {};
     return {
-      minThreshold: getVal('minThreshold') ?? defaults.minThreshold,
-      alpha: getVal('contentMatchWeight') ?? defaults.alpha,
-      decayRate: getVal('confidenceDecayRate') ?? defaults.decayRate,
+      minThreshold: typeof mem.minThreshold === 'number' ? mem.minThreshold : defaults.minThreshold,
+      alpha: typeof mem.contentMatchWeight === 'number' ? mem.contentMatchWeight : defaults.alpha,
+      decayRate: typeof lb.confidenceDecayRate === 'number' ? lb.confidenceDecayRate : defaults.decayRate,
     };
   } catch { return defaults; }
 }
@@ -337,13 +335,12 @@ function parseMemoryDir(dir, entries) {
  * If store is empty, bootstraps from MEMORY.md files directly.
  */
 function init() {
-  // Gate on neural.enabled from config.yaml
-  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.yaml');
+  // Gate on neural.enabled from config.json
+  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.json');
   if (fs.existsSync(cfgPath)) {
     try {
-      const cfgContent = fs.readFileSync(cfgPath, 'utf-8');
-      const neuralMatch = cfgContent.match(/neural:\s*\n(?:[ \t]+.*\n)*?[ \t]+enabled:\s*(\S+)/m);
-      if (neuralMatch && neuralMatch[1] === 'false') {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
+      if (cfg.neural && cfg.neural.enabled === false) {
         return { nodes: 0, edges: 0, message: 'Skipped: neural.enabled=false in config' };
       }
     } catch { /* proceed with defaults */ }

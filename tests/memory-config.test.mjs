@@ -30,10 +30,6 @@ function writeStore(entries) {
   );
 }
 
-function writeConfig(yamlContent) {
-  writeFileSync(join(tmpDir, '.claude-flow', 'config.yaml'), yamlContent, 'utf-8');
-}
-
 function writeConfigJson(jsonObj) {
   writeFileSync(join(tmpDir, '.claude-flow', 'config.json'), JSON.stringify(jsonObj, null, 2), 'utf-8');
 }
@@ -52,7 +48,7 @@ const SAMPLE_ENTRIES = [
 describe('neural.enabled config gating', () => {
   it('init() returns early when neural.enabled=false', () => {
     writeStore(SAMPLE_ENTRIES);
-    writeConfig('neural:\n  enabled: false\n  model: all-MiniLM-L6-v2\n');
+    writeConfigJson({ neural: { enabled: false } });
 
     const result = runInit();
     expect(result.status).toBe(0);
@@ -64,7 +60,7 @@ describe('neural.enabled config gating', () => {
 
   it('init() proceeds when neural.enabled=true', () => {
     writeStore(SAMPLE_ENTRIES);
-    writeConfig('neural:\n  enabled: true\n');
+    writeConfigJson({ neural: { enabled: true } });
 
     const result = runInit();
     expect(result.status).toBe(0);
@@ -73,7 +69,7 @@ describe('neural.enabled config gating', () => {
     expect(output.message).toContain('Graph built');
   });
 
-  it('init() proceeds when no config.yaml exists', () => {
+  it('init() proceeds when no config.json exists', () => {
     writeStore(SAMPLE_ENTRIES);
 
     const result = runInit();
@@ -82,9 +78,9 @@ describe('neural.enabled config gating', () => {
     expect(output.nodes).toBe(2);
   });
 
-  it('corrupt config.yaml falls back to defaults', () => {
+  it('corrupt config.json falls back to defaults', () => {
     writeStore(SAMPLE_ENTRIES);
-    writeConfig('{{{{not valid yaml!!!!');
+    writeFileSync(join(tmpDir, '.claude-flow', 'config.json'), '{not valid json!!!', 'utf-8');
 
     const result = runInit();
     expect(result.status).toBe(0);
@@ -94,9 +90,9 @@ describe('neural.enabled config gating', () => {
 });
 
 describe('configurable thresholds', () => {
-  it('getContext uses configurable minThreshold from config', () => {
+  it('getContext uses configurable minThreshold from config.json', () => {
     writeStore(SAMPLE_ENTRIES);
-    writeConfig('minThreshold: 0.5\ncontentMatchWeight: 0.9\n');
+    writeConfigJson({ memory: { minThreshold: 0.5, contentMatchWeight: 0.9 } });
 
     runInit();
 
@@ -127,9 +123,9 @@ describe('configurable thresholds', () => {
     expect(result.status).toBe(0);
   });
 
-  it('consolidate uses configurable decayRate from config', () => {
+  it('consolidate uses configurable decayRate from config.json', () => {
     writeStore(SAMPLE_ENTRIES);
-    writeConfig('confidenceDecayRate: 0.1\n');
+    writeConfigJson({ memory: { learningBridge: { confidenceDecayRate: 0.1 } } });
 
     runInit();
 
@@ -144,16 +140,15 @@ describe('configurable thresholds', () => {
 });
 
 describe('syncMode configuration', () => {
-  it('readConfig parses syncMode from config.yaml', () => {
+  it('readConfig parses syncMode from config.json', () => {
     const AUTO_HOOK = join(
       import.meta.dirname, '..', '.claude', 'helpers', 'auto-memory-hook.mjs',
     );
 
-    writeConfig('syncMode: on-demand\nminConfidence: 0.8\n');
+    writeConfigJson({ memory: { syncMode: 'on-demand', minConfidence: 0.8 } });
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-
     });
 
     expect(result.status).toBe(0);
@@ -177,28 +172,6 @@ describe('config.json support', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-
-    });
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Disabled');
-  });
-
-  it('config.json takes precedence over config.yaml', () => {
-    const AUTO_HOOK = join(
-      import.meta.dirname, '..', '.claude', 'helpers', 'auto-memory-hook.mjs',
-    );
-
-    // config.json: learning disabled
-    writeConfigJson({
-      memory: { learningBridge: { enabled: false } },
-    });
-    // config.yaml: learning enabled (should be ignored)
-    writeConfig('learningBridge:\n  enabled: true\n');
-
-    const result = spawnSync('node', [AUTO_HOOK, 'status'], {
-      cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-
     });
 
     expect(result.status).toBe(0);
@@ -214,9 +187,95 @@ describe('config.json support', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-
     });
 
     expect(result.status).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WM-008: agentdb v3 config reading
+// ---------------------------------------------------------------------------
+describe('agentdb v3 config reading (WM-008)', () => {
+  it('auto-memory-hook reads agentdb config from config.json', () => {
+    const AUTO_HOOK = join(
+      import.meta.dirname, '..', '.claude', 'helpers', 'auto-memory-hook.mjs',
+    );
+
+    writeConfigJson({
+      memory: {
+        backend: 'hybrid',
+        agentdb: {
+          vectorBackend: 'rvf',
+          enableLearning: true,
+          learningPositiveThreshold: 0.7,
+          learningBatchSize: 32,
+        },
+      },
+    });
+
+    const result = spawnSync('node', [AUTO_HOOK, 'status'], {
+      cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Auto Memory Bridge Status');
+  });
+
+  it('auto-memory-hook works with agentdb learning disabled', () => {
+    const AUTO_HOOK = join(
+      import.meta.dirname, '..', '.claude', 'helpers', 'auto-memory-hook.mjs',
+    );
+
+    writeConfigJson({
+      memory: {
+        backend: 'hybrid',
+        agentdb: {
+          vectorBackend: 'rvf',
+          enableLearning: false,
+        },
+      },
+    });
+
+    const result = spawnSync('node', [AUTO_HOOK, 'status'], {
+      cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
+    });
+
+    expect(result.status).toBe(0);
+  });
+
+  it('auto-memory-hook defaults agentdb config when section absent', () => {
+    const AUTO_HOOK = join(
+      import.meta.dirname, '..', '.claude', 'helpers', 'auto-memory-hook.mjs',
+    );
+
+    // Config with no agentdb section at all
+    writeConfigJson({
+      memory: { backend: 'hybrid' },
+    });
+
+    const result = spawnSync('node', [AUTO_HOOK, 'status'], {
+      cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
+    });
+
+    expect(result.status).toBe(0);
+  });
+
+  it('intelligence.cjs init works with agentdb config present', () => {
+    writeStore(SAMPLE_ENTRIES);
+    writeConfigJson({
+      neural: { enabled: true },
+      memory: {
+        agentdb: {
+          vectorBackend: 'rvf',
+          enableLearning: true,
+        },
+      },
+    });
+
+    const result = runInit();
+    expect(result.status).toBe(0);
+    const output = JSON.parse(result.stdout.trim());
+    expect(output.nodes).toBe(2);
   });
 });

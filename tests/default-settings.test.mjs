@@ -35,15 +35,18 @@ describe('GUIDANCE_ENV_DEFAULTS', () => {
 // GUIDANCE_HOOKS_DEFAULTS
 // ---------------------------------------------------------------------------
 describe('GUIDANCE_HOOKS_DEFAULTS', () => {
-  it('has PreToolUse, PostToolUse, SessionStart, SessionEnd, PreCompact keys', () => {
+  it('has all expected hook event keys', () => {
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreToolUse');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PostToolUse');
+    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PostToolUseFailure');
+    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('UserPromptSubmit');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionStart');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('SessionEnd');
+    expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('Stop');
     expect(GUIDANCE_HOOKS_DEFAULTS).toHaveProperty('PreCompact');
   });
 
-  const hookCategories = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd', 'PreCompact'];
+  const hookCategories = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'SessionStart', 'SessionEnd', 'Stop', 'PreCompact'];
 
   for (const category of hookCategories) {
     describe(`${category}`, () => {

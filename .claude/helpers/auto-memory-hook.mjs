@@ -167,7 +167,7 @@ async function loadMemoryPackage() {
 }
 
 // ============================================================================
-// Read config from .claude-flow/config.json (YAML fallback for migration)
+// Read config from .claude-flow/config.json
 // ============================================================================
 
 function readConfig() {
@@ -197,40 +197,6 @@ function readConfig() {
       return defaults;
     } catch (err) {
       dim(`[config:error] Failed to parse config.json: ${err.message}`);
-    }
-  }
-
-  // Fallback: read config.yaml for backward compat (one-time migration)
-  const yamlPath = join(PROJECT_ROOT, '.claude-flow', 'config.yaml');
-  if (existsSync(yamlPath)) {
-    try {
-      const yaml = readFileSync(yamlPath, 'utf-8');
-      // Minimal YAML extraction — just enough to migrate to JSON
-      const getBool = (key) => {
-        const match = yaml.match(new RegExp(`${key}:\\s*(true|false)`, 'i'));
-        return match ? match[1] === 'true' : undefined;
-      };
-      const getStr = (key) => {
-        const match = yaml.match(new RegExp(`${key}:\\s*([\\w-]+)`, 'i'));
-        return match ? match[1] : undefined;
-      };
-
-      const parsedBackend = getStr('backend');
-      if (parsedBackend && ['hybrid', 'json', 'sqlite', 'agentdb'].includes(parsedBackend)) {
-        defaults.backend = parsedBackend;
-      }
-      const lbEnabled = getBool('learningBridge[\\s\\S]*?enabled');
-      if (lbEnabled !== undefined) defaults.learningBridge.enabled = lbEnabled;
-      const mgEnabled = getBool('memoryGraph[\\s\\S]*?enabled');
-      if (mgEnabled !== undefined) defaults.memoryGraph.enabled = mgEnabled;
-      const asEnabled = getBool('agentScopes[\\s\\S]*?enabled');
-      if (asEnabled !== undefined) defaults.agentScopes.enabled = asEnabled;
-      defaults.syncMode = getStr('syncMode') || defaults.syncMode;
-
-      dim('[config] Read from config.yaml (legacy). Run "cf-guidance install --force" to generate config.json.');
-      return defaults;
-    } catch {
-      return defaults;
     }
   }
 

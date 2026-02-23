@@ -99,8 +99,12 @@ describe('installIntoRepo', () => {
     expect(settings.hooks.PreToolUse).toBeDefined();
     expect(Array.isArray(settings.hooks.PreToolUse)).toBe(true);
     expect(settings.hooks.PostToolUse).toBeDefined();
+    expect(settings.hooks.PostToolUseFailure).toBeDefined();
+    expect(settings.hooks.UserPromptSubmit).toBeDefined();
     expect(settings.hooks.SessionStart).toBeDefined();
     expect(settings.hooks.SessionEnd).toBeDefined();
+    expect(settings.hooks.Stop).toBeDefined();
+    expect(settings.hooks.PreCompact).toBeDefined();
   });
 
   it('deduplicates hooks when relative and $CLAUDE_PROJECT_DIR paths coexist', () => {
@@ -280,14 +284,11 @@ describe('verifyRepo', () => {
     expect(handlerCheck.exists).toBe(false);
   });
 
-  it('includes compatPairs and syntaxChecks in result', () => {
+  it('includes syntaxChecks in result', () => {
     installIntoRepo({ targetRepo: tmpDir, targetMode: 'claude' });
     writeRealHandler(tmpDir);
 
     const result = verifyRepo({ targetRepo: tmpDir, targetMode: 'claude' });
-
-    expect(result.compatPairs).toBeDefined();
-    expect(Array.isArray(result.compatPairs)).toBe(true);
 
     expect(result.syntaxChecks).toBeDefined();
     expect(Array.isArray(result.syntaxChecks)).toBe(true);

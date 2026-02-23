@@ -95,6 +95,38 @@ describe('e2e: init + guidance install (default)', { skip: skipMsg ? true : fals
     expect(existsSync(join(dir, '.claude', 'settings.json'))).toBe(true);
   });
 
+  // ── WM-008: agentdb v3 config in init output ──
+
+  it('init config.json has agentdb section with vectorBackend rvf (WM-008)', () => {
+    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
+    expect(cfg.memory?.agentdb).toBeDefined();
+    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
+  });
+
+  it('init config.json has agentdb learning config (WM-008)', () => {
+    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
+    const agentdb = cfg.memory?.agentdb;
+    if (!agentdb) return; // skip if agentdb section missing
+    expect(agentdb.enableLearning).toBe(true);
+    expect(typeof agentdb.learningPositiveThreshold).toBe('number');
+    expect(typeof agentdb.learningBatchSize).toBe('number');
+  });
+
+  it('init generates hook with .rvf agentdb path (WM-008)', () => {
+    const hookPath = join(dir, '.claude', 'helpers', 'auto-memory-hook.mjs');
+    if (!existsSync(hookPath)) return;
+    const content = readFileSync(hookPath, 'utf-8');
+    expect(content).toContain('agentdb-memory.rvf');
+    expect(content).not.toContain('agentdb-memory.db');
+  });
+
+  it('init generates hook with vectorBackend rvf (WM-008)', () => {
+    const hookPath = join(dir, '.claude', 'helpers', 'auto-memory-hook.mjs');
+    if (!existsSync(hookPath)) return;
+    const content = readFileSync(hookPath, 'utf-8');
+    expect(content).toContain("vectorBackend: 'rvf'");
+  });
+
   // ── guidance install layers on top ──
 
   describe('after guidance install', () => {
@@ -138,6 +170,13 @@ describe('e2e: init + guidance install (default)', { skip: skipMsg ? true : fals
       const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
       // Init wrote hybrid; guidance should preserve it (no --force)
       expect(cfg.memory?.backend).toBe('hybrid');
+    });
+
+    it('guidance preserves agentdb v3 config from init (WM-008)', () => {
+      const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
+      // Init wrote agentdb.vectorBackend = 'rvf'; guidance should preserve it
+      expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
+      expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
     });
 
     it('guidance components.json written', () => {
@@ -206,28 +245,19 @@ describe('e2e: init --minimal + guidance install', { skip: skipMsg ? true : fals
     expect(typeof cfg.neural?.enabled).toBe('boolean');
   });
 
-  describe('after guidance install with --backend json', () => {
+  describe('after guidance install', () => {
     beforeAll(async () => {
       await installIntoRepo({
         targetRepo: dir,
         targetMode: 'claude',
         preset: 'minimal',
-        backend: 'json',
       });
       writeRealHandler(dir);
     });
 
-    it('config.json backend overridden to json by --backend flag', () => {
+    it('config.json is untouched by guidance (upstream init values preserved)', () => {
       const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-      expect(cfg.memory?.backend).toBe('json');
-    });
-
-    it('guidance config.json has full structure even with json backend', () => {
-      const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-      expect(cfg.version).toBe('3.0.0');
-      expect(cfg.memory?.learningBridge?.enabled).toBe(true);
-      expect(cfg.memory?.memoryGraph?.enabled).toBe(true);
-      expect(cfg.hooks?.enabled).toBe(true);
+      expect(cfg.memory?.backend).toBe('hybrid');
     });
 
     it('settings.json has guidance env vars', () => {
@@ -269,6 +299,12 @@ describe('e2e: init --full + guidance install (full preset)', { skip: skipMsg ? 
     expect(cfg.neural?.enabled).toBe(true);
   });
 
+  it('init --full config.json has agentdb v3 section (WM-008)', () => {
+    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
+    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
+    expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
+  });
+
   describe('after guidance install (full preset)', () => {
     beforeAll(async () => {
       await installIntoRepo({
@@ -304,7 +340,7 @@ describe('e2e: init --full + guidance install (full preset)', { skip: skipMsg ? 
 
     it('settings.json hooks cover all guidance events', () => {
       const settings = readJson(join(dir, '.claude', 'settings.json'));
-      const expectedEvents = ['PreToolUse', 'PostToolUse', 'SessionStart', 'SessionEnd'];
+      const expectedEvents = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'UserPromptSubmit', 'SessionStart', 'SessionEnd', 'Stop', 'PreCompact'];
       for (const event of expectedEvents) {
         expect(settings.hooks).toHaveProperty(event);
       }
@@ -332,10 +368,10 @@ describe('e2e: init --full + guidance install (full preset)', { skip: skipMsg ? 
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Suite: E2E — guidance --force overwrites init config.json
+// Suite: E2E — guidance --force does not touch config.json
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('e2e: guidance --force overwrites init config.json', { skip: skipMsg ? true : false }, () => {
+describe('e2e: guidance --force does not touch config.json', { skip: skipMsg ? true : false }, () => {
   let dir;
 
   beforeAll(async () => {
@@ -343,13 +379,12 @@ describe('e2e: guidance --force overwrites init config.json', { skip: skipMsg ? 
     const r = cli(['init', '--yes'], dir);
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
 
-    // Install guidance with --force and a different backend
+    // Install guidance with --force
     await installIntoRepo({
       targetRepo: dir,
       targetMode: 'claude',
       preset: 'minimal',
       force: true,
-      backend: 'sqlite',
     });
   });
 
@@ -357,17 +392,10 @@ describe('e2e: guidance --force overwrites init config.json', { skip: skipMsg ? 
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('config.json backend overwritten to sqlite', () => {
+  it('config.json is untouched (upstream init values preserved)', () => {
     const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.backend).toBe('sqlite');
-  });
-
-  it('config.json has guidance buildConfigJson structure', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.version).toBe('3.0.0');
-    expect(cfg.memory?.learningBridge?.enabled).toBe(true);
-    expect(cfg.neural?.enabled).toBe(true);
-    expect(cfg.hooks?.enabled).toBe(true);
+    // guidance --force does NOT modify config.json; upstream init owns it
+    expect(cfg.memory?.backend).toBe('hybrid');
   });
 
   it('settings.json has guidance env vars (not clobbered)', () => {

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -12,36 +12,8 @@ import {
   GUIDANCE_PRESETS,
   resolveComponents,
   buildHookDefaults,
-  buildConfigJson,
 } from './default-settings.mjs';
 import { readJson, ensureDir, writeJson } from './utils.mjs';
-
-const COMPAT_MODULES = ['router', 'session', 'memory', 'statusline'];
-
-function ensureHelperCompat(helpersDir) {
-  const actions = [];
-  if (!existsSync(helpersDir)) return actions;
-  for (const mod of COMPAT_MODULES) {
-    const cjsPath = resolve(helpersDir, `${mod}.cjs`);
-    const jsPath = resolve(helpersDir, `${mod}.js`);
-    if (existsSync(cjsPath) && !existsSync(jsPath)) {
-      copyFileSync(cjsPath, jsPath);
-      actions.push({ module: mod, action: 'cjs->js' });
-    } else if (existsSync(jsPath) && !existsSync(cjsPath)) {
-      copyFileSync(jsPath, cjsPath);
-      actions.push({ module: mod, action: 'js->cjs' });
-    }
-  }
-  return actions;
-}
-
-function checkHelperCompat(helpersDir) {
-  return COMPAT_MODULES.map((mod) => {
-    const cjs = existsSync(resolve(helpersDir, `${mod}.cjs`));
-    const js = existsSync(resolve(helpersDir, `${mod}.js`));
-    return { module: mod, cjs, js, hasBoth: cjs && js, hasEither: cjs || js };
-  });
-}
 
 const GUIDANCE_CODEX_CONFIG_BLOCK = [
   '# =============================================================================',
@@ -233,9 +205,13 @@ export async function installIntoRepo({
   eventTimeout,
   generateKey = false,
   noAutopilot = false,
+  noHooks = false,
+  noEventWiring = false,
+  autopilotMinDelta,
+  autopilotAb = false,
+  autopilotMinAbGain,
+  skipCfHooksInCodex = false,
   dryRun = false,
-  backend,
-  configOptions = {},
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -267,6 +243,12 @@ export async function installIntoRepo({
   if (failClosed) envOverrides.GUIDANCE_EVENT_FAIL_CLOSED = '1';
   if (eventTimeout) envOverrides.GUIDANCE_EVENT_SYNC_TIMEOUT_MS = String(eventTimeout);
   if (noAutopilot) envOverrides.GUIDANCE_AUTOPILOT_ENABLED = '0';
+  if (noHooks) envOverrides.CLAUDE_FLOW_HOOKS_ENABLED = 'false';
+  if (noEventWiring) envOverrides.GUIDANCE_EVENT_WIRING_ENABLED = '0';
+  if (autopilotMinDelta != null) envOverrides.GUIDANCE_AUTOPILOT_MIN_DELTA = String(autopilotMinDelta);
+  if (autopilotAb) envOverrides.GUIDANCE_AUTOPILOT_AB = '1';
+  if (autopilotMinAbGain != null) envOverrides.GUIDANCE_AUTOPILOT_MIN_AB_GAIN = String(autopilotMinAbGain);
+  if (skipCfHooksInCodex) envOverrides.GUIDANCE_CODEX_SKIP_CF_HOOKS = '1';
   if (generateKey) {
     const crypto = await import('node:crypto');
     envOverrides.GUIDANCE_PROOF_KEY = crypto.randomBytes(32).toString('hex');
@@ -288,7 +270,7 @@ export async function installIntoRepo({
     if (usesCodexMode(mode) && resolvedSet.has('codex')) {
       wouldWrite.push('.agents/config.toml', 'AGENTS.md');
     }
-    wouldWrite.push('.claude-flow/guidance/components.json', '.claude-flow/config.json', 'CLAUDE.local.md', '.gitignore');
+    wouldWrite.push('.claude-flow/guidance/components.json', 'CLAUDE.local.md', '.gitignore');
 
     return {
       dryRun: true,
@@ -299,7 +281,6 @@ export async function installIntoRepo({
       envVars: mergedEnv,
       hooks: Object.keys(hookDefaults),
       hookTimeout: hookTimeout || 5000,
-      configJson: buildConfigJson({ backend: backend || 'hybrid', ...configOptions }),
     };
   }
 
@@ -309,10 +290,6 @@ export async function installIntoRepo({
     ensureDir(dirname(shimPath));
     writeText(shimPath, HOOK_HANDLER_SHIM);
   }
-
-  // Create .js/.cjs compatibility copies for helper modules.
-  // Different hook-handler variants require() with different extensions.
-  const compatActions = ensureHelperCompat(resolve(target, '.claude/helpers'));
 
   // Merge package.json scripts + dependencies.
   const packagePath = resolve(target, 'package.json');
@@ -400,14 +377,6 @@ export async function installIntoRepo({
   ensureDir(cfGuidanceDir);
   writeJson(componentsJsonPath, componentsJson);
 
-  // Generate .claude-flow/config.json (canonical runtime config).
-  const configJsonPath = resolve(target, '.claude-flow', 'config.json');
-  const hasConfigOverrides = backend || Object.keys(configOptions).length > 0;
-  if (force || hasConfigOverrides || !existsSync(configJsonPath)) {
-    const configJsonContent = buildConfigJson({ backend: backend || 'hybrid', ...configOptions });
-    writeText(configJsonPath, JSON.stringify(configJsonContent, null, 2) + '\n');
-  }
-
   // Ensure local guidance file and gitignore entries.
   writeMissingStub(
     resolve(target, 'CLAUDE.local.md'),
@@ -429,7 +398,6 @@ export async function installIntoRepo({
     filesInstalled: [
       '.claude/helpers/hook-handler.cjs (shim)',
     ],
-    compatActions,
     packageUpdated: packagePath,
     settingsUpdated: settingsPath,
     agentsConfigUpdated: agentsConfigPath,
@@ -481,9 +449,6 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     checks.push({ path: 'dependency:@sparkleideas/claude-flow-guidance', exists: hasImplDep });
   }
 
-  // Check .js/.cjs compat pairs exist for helper modules.
-  const compatPairs = checkHelperCompat(resolve(target, '.claude/helpers'));
-
   const syntaxChecks = [];
   const checkFiles = [
     '.claude/helpers/hook-handler.cjs',
@@ -522,12 +487,9 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     );
   }
 
-  const compatOk = compatPairs.every((p) => !p.hasEither || p.hasBoth);
-
   const passed =
     checks.every((check) => check.exists) &&
     syntaxChecks.every((check) => check.ok) &&
-    compatOk &&
     (!usesClaudeMode(mode) || smoke.status === 0) &&
     (!usesCodexMode(mode) || smokeCodex.status === 0);
 
@@ -536,7 +498,6 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
     targetMode: mode,
     passed,
     files: checks,
-    compatPairs,
     syntaxChecks,
     smoke: {
       exitCode: smoke.status,
@@ -567,9 +528,13 @@ export async function initRepo({
   eventTimeout,
   generateKey = false,
   noAutopilot = false,
+  noHooks = false,
+  noEventWiring = false,
+  autopilotMinDelta,
+  autopilotAb = false,
+  autopilotMinAbGain,
+  skipCfHooksInCodex = false,
   dryRun = false,
-  backend,
-  configOptions = {},
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -619,9 +584,13 @@ export async function initRepo({
     eventTimeout,
     generateKey,
     noAutopilot,
+    noHooks,
+    noEventWiring,
+    autopilotMinDelta,
+    autopilotAb,
+    autopilotMinAbGain,
+    skipCfHooksInCodex,
     dryRun,
-    backend,
-    configOptions,
   });
 
   let verifyReport = null;

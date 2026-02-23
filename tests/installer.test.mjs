@@ -1,6 +1,6 @@
-import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { installIntoRepo } from '../src/installer.mjs';
 
 function makeTempRepo() {
@@ -110,6 +110,78 @@ describe('installIntoRepo CLI flag overrides', () => {
     expect(exists).toBe(false);
   });
 
+  it('--no-hooks sets CLAUDE_FLOW_HOOKS_ENABLED=false', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      noHooks: true,
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.CLAUDE_FLOW_HOOKS_ENABLED).toBe('false');
+  });
+
+  it('--no-event-wiring sets GUIDANCE_EVENT_WIRING_ENABLED=0', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      noEventWiring: true,
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.GUIDANCE_EVENT_WIRING_ENABLED).toBe('0');
+  });
+
+  it('--autopilot-min-delta sets GUIDANCE_AUTOPILOT_MIN_DELTA', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      autopilotMinDelta: '0.8',
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.GUIDANCE_AUTOPILOT_MIN_DELTA).toBe('0.8');
+  });
+
+  it('--autopilot-ab sets GUIDANCE_AUTOPILOT_AB=1', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      autopilotAb: true,
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.GUIDANCE_AUTOPILOT_AB).toBe('1');
+  });
+
+  it('--autopilot-min-ab-gain sets GUIDANCE_AUTOPILOT_MIN_AB_GAIN', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      autopilotMinAbGain: '0.1',
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.GUIDANCE_AUTOPILOT_MIN_AB_GAIN).toBe('0.1');
+  });
+
+  it('--skip-cf-hooks-in-codex sets GUIDANCE_CODEX_SKIP_CF_HOOKS=1', async () => {
+    const dir = makeTempRepo();
+    await installIntoRepo({
+      targetRepo: dir,
+      targetMode: 'claude',
+      skipCfHooksInCodex: true,
+      preset: 'minimal',
+    });
+    const settings = readSettings(dir);
+    expect(settings.env.GUIDANCE_CODEX_SKIP_CF_HOOKS).toBe('1');
+  });
+
   it('settings.json contains all 9 env vars on fresh install', async () => {
     const dir = makeTempRepo();
     await installIntoRepo({
@@ -150,248 +222,8 @@ describe('installIntoRepo CLI flag overrides', () => {
     }
     expect(settings.hooks).not.toHaveProperty('Compact');
     expect(settings.hooks).toHaveProperty('PreCompact');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Fine-grained config.json options via configOptions
-// ---------------------------------------------------------------------------
-
-function readConfigJson(dir) {
-  return JSON.parse(readFileSync(join(dir, '.claude-flow', 'config.json'), 'utf-8'));
-}
-
-describe('installIntoRepo config.json fine-grained options', () => {
-  it('default config.json has all expected defaults', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'minimal' });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.backend).toBe('hybrid');
-    expect(cfg.memory.enableHNSW).toBe(true);
-    expect(cfg.memory.cacheSize).toBe(100);
-    expect(cfg.memory.learningBridge.enabled).toBe(true);
-    expect(cfg.memory.memoryGraph.enabled).toBe(true);
-    expect(cfg.memory.agentScopes.enabled).toBe(true);
-    expect(cfg.neural.enabled).toBe(true);
-    expect(cfg.hooks.autoExecute).toBe(true);
-  });
-
-  it('--no-hnsw disables HNSW in config.json', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { enableHNSW: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.enableHNSW).toBe(false);
-  });
-
-  it('--cache-size sets memory.cacheSize', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { cacheSize: 500 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.cacheSize).toBe(500);
-  });
-
-  it('--no-learning-bridge disables learning bridge', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { learningBridge: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.learningBridge.enabled).toBe(false);
-  });
-
-  it('--sona-mode sets learning bridge sonaMode', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { sonaMode: 'aggressive' },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.learningBridge.sonaMode).toBe('aggressive');
-  });
-
-  it('--confidence-decay sets confidenceDecayRate', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { confidenceDecayRate: 0.01 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.learningBridge.confidenceDecayRate).toBe(0.01);
-  });
-
-  it('--access-boost sets accessBoostAmount', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { accessBoostAmount: 0.1 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.learningBridge.accessBoostAmount).toBe(0.1);
-  });
-
-  it('--consolidation-threshold sets consolidationThreshold', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { consolidationThreshold: 25 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.learningBridge.consolidationThreshold).toBe(25);
-  });
-
-  it('--no-memory-graph disables memory graph', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { memoryGraph: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.memoryGraph.enabled).toBe(false);
-  });
-
-  it('--pagerank-damping sets damping factor', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { pageRankDamping: 0.9 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.memoryGraph.pageRankDamping).toBe(0.9);
-  });
-
-  it('--max-graph-nodes sets max nodes', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { maxNodes: 10000 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.memoryGraph.maxNodes).toBe(10000);
-  });
-
-  it('--similarity-threshold sets threshold', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { similarityThreshold: 0.95 },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.memoryGraph.similarityThreshold).toBe(0.95);
-  });
-
-  it('--no-agent-scopes disables agent scopes', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { agentScopes: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.agentScopes.enabled).toBe(false);
-  });
-
-  it('--default-scope sets agent scope', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { defaultScope: 'global' },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.agentScopes.defaultScope).toBe('global');
-  });
-
-  it('--no-neural disables neural subsystem', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { neuralEnabled: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.neural.enabled).toBe(false);
-  });
-
-  it('--neural-model-path sets custom path', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { neuralModelPath: '/custom/models/neural' },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.neural.modelPath).toBe('/custom/models/neural');
-  });
-
-  it('--no-hooks-auto-execute disables auto-execute', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { hooksAutoExecute: false },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.hooks.autoExecute).toBe(false);
-  });
-
-  it('multiple configOptions combine with --backend', async () => {
-    const dir = makeTempRepo();
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      backend: 'sqlite',
-      configOptions: {
-        enableHNSW: false,
-        cacheSize: 200,
-        learningBridge: false,
-        neuralEnabled: false,
-        defaultScope: 'workspace',
-      },
-    });
-    const cfg = readConfigJson(dir);
-    expect(cfg.memory.backend).toBe('sqlite');
-    expect(cfg.memory.enableHNSW).toBe(false);
-    expect(cfg.memory.cacheSize).toBe(200);
-    expect(cfg.memory.learningBridge.enabled).toBe(false);
-    expect(cfg.neural.enabled).toBe(false);
-    expect(cfg.memory.agentScopes.defaultScope).toBe('workspace');
-    // Unchanged defaults preserved
-    expect(cfg.memory.memoryGraph.enabled).toBe(true);
-    expect(cfg.hooks.autoExecute).toBe(true);
-  });
-
-  it('configOptions triggers config.json write even without --backend', async () => {
-    const dir = makeTempRepo();
-    // Pre-create a config.json with different values
-    const cfDir = join(dir, '.claude-flow');
-    mkdirSync(cfDir, { recursive: true });
-    writeFileSync(join(cfDir, 'config.json'), JSON.stringify({ version: '2.0.0', memory: { backend: 'old' } }));
-
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: { cacheSize: 999 },
-    });
-    const cfg = readConfigJson(dir);
-    // configOptions should trigger a rewrite with buildConfigJson defaults + overrides
-    expect(cfg.version).toBe('3.0.0');
-    expect(cfg.memory.cacheSize).toBe(999);
-    expect(cfg.memory.backend).toBe('hybrid');
-  });
-
-  it('empty configOptions does not overwrite existing config.json', async () => {
-    const dir = makeTempRepo();
-    const cfDir = join(dir, '.claude-flow');
-    mkdirSync(cfDir, { recursive: true });
-    writeFileSync(join(cfDir, 'config.json'), JSON.stringify({ version: '2.0.0', custom: true }));
-
-    await installIntoRepo({
-      targetRepo: dir, targetMode: 'claude', preset: 'minimal',
-      configOptions: {},
-    });
-    const cfg = readConfigJson(dir);
-    // Empty configOptions = no overrides, existing file preserved
-    expect(cfg.version).toBe('2.0.0');
-    expect(cfg.custom).toBe(true);
+    expect(settings.hooks).toHaveProperty('Stop');
+    expect(settings.hooks).toHaveProperty('UserPromptSubmit');
+    expect(settings.hooks).toHaveProperty('PostToolUseFailure');
   });
 });

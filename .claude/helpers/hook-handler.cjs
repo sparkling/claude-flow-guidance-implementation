@@ -6,11 +6,17 @@
  * Usage: node hook-handler.cjs <command> [args...]
  *
  * Commands:
- *   route          - Route a task to optimal agent (reads PROMPT from env/stdin)
- *   pre-bash       - Validate command safety before execution
- *   post-edit      - Record edit outcome for learning
- *   session-restore - Restore previous session state
- *   session-end    - End session and persist state
+ *   route            - Route a task to optimal agent (reads PROMPT from env/stdin)
+ *   pre-edit         - Validate file path before write/edit
+ *   pre-bash         - Validate command safety before execution
+ *   post-edit        - Record edit outcome for learning
+ *   post-tool-failure - Record negative feedback on tool failures
+ *   user-prompt      - Screen user prompt for adversarial input
+ *   session-restore  - Restore previous session state
+ *   session-end      - End session and persist state
+ *   stop             - Finalize metrics and seal proof chain on agent stop
+ *   compact-manual   - Save intelligence state before manual compaction
+ *   compact-auto     - Save intelligence state before auto compaction
  */
 
 const path = require('path');
@@ -102,6 +108,26 @@ const handlers = {
     } else {
       console.log('[INFO] Router not available, using default routing');
     }
+  },
+
+  'pre-edit': () => {
+    // Validate file path before write/edit operations
+    const filePath = process.env.TOOL_INPUT_file_path || args[0] || '';
+    if (filePath) {
+      // Block writes to sensitive paths
+      const blocked = ['/etc/', '/usr/', '/bin/', '/sbin/', 'node_modules/', '.git/objects/'];
+      const lower = filePath.toLowerCase();
+      for (const b of blocked) {
+        if (lower.includes(b)) {
+          console.error(`[BLOCKED] Edit to restricted path: ${filePath}`);
+          process.exit(1);
+        }
+      }
+    }
+    if (session && session.metric) {
+      try { session.metric('edits_attempted'); } catch (e) { /* no active session */ }
+    }
+    console.log('[OK] Edit path validated');
   },
 
   'pre-bash': () => {
@@ -214,6 +240,94 @@ const handlers = {
       console.log('[WARN] Intelligence module not available. Run session-restore first.');
     }
   },
+
+  'post-tool-failure': () => {
+    // Record negative feedback for intelligence on tool failures
+    if (intelligence && intelligence.feedback) {
+      try {
+        intelligence.feedback(false);
+      } catch (e) { /* non-fatal */ }
+    }
+    if (session && session.metric) {
+      try { session.metric('tool_failures'); } catch (e) { /* no active session */ }
+    }
+    console.log('[OK] Tool failure recorded');
+  },
+
+  'user-prompt': () => {
+    // Screen user input for adversarial patterns (prompt injection pre-check)
+    const input = process.env.USER_PROMPT || prompt;
+    if (input) {
+      const suspicious = [
+        /ignore\s+(all\s+)?previous\s+instructions/i,
+        /you\s+are\s+now\s+(?:a|an|in)\s+/i,
+        /system\s*:\s*you\s+are/i,
+        /\bdo\s+not\s+follow\s+(any|the)\s+rules\b/i,
+      ];
+      for (const pat of suspicious) {
+        if (pat.test(input)) {
+          console.error('[WARN] Suspicious prompt pattern detected — flagging for review');
+          break;
+        }
+      }
+    }
+    // Route the incoming prompt for context injection
+    if (intelligence && intelligence.getContext) {
+      try {
+        const ctx = intelligence.getContext(input);
+        if (ctx) console.log(ctx);
+      } catch (e) { /* non-fatal */ }
+    }
+    console.log('[OK] User prompt screened');
+  },
+
+  'stop': () => {
+    // Finalize session metrics and seal proof chain on agent stop
+    if (intelligence && intelligence.consolidate) {
+      try {
+        const result = intelligence.consolidate();
+        if (result && result.entries > 0) {
+          console.log(`[INTELLIGENCE] Final consolidation: ${result.entries} entries, ${result.edges} edges`);
+        }
+      } catch (e) { /* non-fatal */ }
+    }
+    if (session && session.end) {
+      try { session.end(); } catch (e) { /* non-fatal */ }
+    }
+    console.log('[OK] Agent stopped — state persisted');
+  },
+
+  'compact-manual': () => {
+    // Save intelligence state before manual context compaction
+    if (intelligence && intelligence.consolidate) {
+      try {
+        const result = intelligence.consolidate();
+        if (result && result.entries > 0) {
+          console.log(`[INTELLIGENCE] Pre-compact save: ${result.entries} entries, ${result.edges} edges`);
+        }
+      } catch (e) { /* non-fatal */ }
+    }
+    if (session && session.checkpoint) {
+      try { session.checkpoint('compact-manual'); } catch (e) { /* non-fatal */ }
+    }
+    console.log('[OK] State saved before manual compaction');
+  },
+
+  'compact-auto': () => {
+    // Save intelligence state before automatic context compaction
+    if (intelligence && intelligence.consolidate) {
+      try {
+        const result = intelligence.consolidate();
+        if (result && result.entries > 0) {
+          console.log(`[INTELLIGENCE] Pre-compact save: ${result.entries} entries, ${result.edges} edges`);
+        }
+      } catch (e) { /* non-fatal */ }
+    }
+    if (session && session.checkpoint) {
+      try { session.checkpoint('compact-auto'); } catch (e) { /* non-fatal */ }
+    }
+    console.log('[OK] State saved before auto compaction');
+  },
 };
 
 // Execute the handler
@@ -228,5 +342,5 @@ if (command && handlers[command]) {
   // Unknown command - pass through without error
   console.log(`[OK] Hook: ${command}`);
 } else {
-  console.log('Usage: hook-handler.cjs <route|pre-bash|post-edit|session-restore|session-end|pre-task|post-task|stats>');
+  console.log('Usage: hook-handler.cjs <route|pre-edit|pre-bash|pre-task|post-edit|post-task|post-tool-failure|user-prompt|session-restore|session-end|stop|compact-manual|compact-auto|stats>');
 }

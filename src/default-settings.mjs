@@ -220,6 +220,70 @@ export const GUIDANCE_PRESETS = {
   full: ['trust', 'adversarial', 'proof', 'conformance', 'evolution', 'autopilot', 'analysis', 'codex'],
 };
 
+export function buildConfigJson(options = {}) {
+  // Accept a plain string for backwards compatibility: buildConfigJson('sqlite')
+  const opts = typeof options === 'string' ? { backend: options } : options;
+  const {
+    backend = 'hybrid',
+    enableHNSW = true,
+    cacheSize = 100,
+    // Learning bridge
+    learningBridge = true,
+    sonaMode = 'balanced',
+    confidenceDecayRate = 0.005,
+    accessBoostAmount = 0.03,
+    consolidationThreshold = 10,
+    // Memory graph
+    memoryGraph = true,
+    pageRankDamping = 0.85,
+    maxNodes = 5000,
+    similarityThreshold = 0.8,
+    // Agent scopes
+    agentScopes = true,
+    defaultScope = 'project',
+    // Neural
+    neuralEnabled = true,
+    neuralModelPath = '.claude-flow/neural',
+    // Hooks
+    hooksEnabled = true,
+    hooksAutoExecute = true,
+  } = opts;
+
+  return {
+    version: '3.0.0',
+    memory: {
+      backend,
+      enableHNSW,
+      cacheSize,
+      learningBridge: {
+        enabled: learningBridge,
+        sonaMode,
+        confidenceDecayRate,
+        accessBoostAmount,
+        consolidationThreshold,
+      },
+      memoryGraph: {
+        enabled: memoryGraph,
+        pageRankDamping,
+        maxNodes,
+        similarityThreshold,
+      },
+      agentScopes: {
+        enabled: agentScopes,
+        defaultScope,
+      },
+    },
+    neural: {
+      enabled: neuralEnabled,
+      modelPath: neuralModelPath,
+    },
+    hooks: {
+      enabled: hooksEnabled,
+      autoExecute: hooksAutoExecute,
+    },
+  };
+}
+
 export function resolveComponents({ components, exclude, preset } = {}) {
   const validNames = Object.keys(GUIDANCE_COMPONENTS);
 

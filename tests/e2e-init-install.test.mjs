@@ -73,8 +73,8 @@ describe('e2e: init + guidance install (default)', { skip: skipMsg ? true : fals
 
   // ── claude-flow init produced the expected scaffolding ──
 
-  it('init creates .claude-flow/config.yaml', () => {
-    expect(existsSync(join(dir, '.claude-flow', 'config.yaml'))).toBe(true);
+  it('init no longer creates .claude-flow/config.yaml (SG-008: config.json only)', () => {
+    expect(existsSync(join(dir, '.claude-flow', 'config.yaml'))).toBe(false);
   });
 
   it('init creates .claude-flow/config.json', () => {

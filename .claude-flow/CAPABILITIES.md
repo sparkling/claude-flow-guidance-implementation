@@ -387,7 +387,7 @@ npx @claude-flow/cli@latest hooks worker dispatch --trigger optimize
 ### File Structure
 ```
 .claude-flow/
-├── config.yaml      # Runtime configuration
+├── config.json      # Runtime configuration
 ├── CAPABILITIES.md  # This file
 ├── data/            # Memory storage
 ├── logs/            # Operation logs

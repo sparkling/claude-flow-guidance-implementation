@@ -11,13 +11,13 @@
  *   node auto-memory-hook.mjs status   # Show bridge status
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '../..');
+const PROJECT_ROOT = process.env.AUTO_MEMORY_PROJECT_ROOT || join(__dirname, '../..');
 const DATA_DIR = join(PROJECT_ROOT, '.claude-flow', 'data');
 const STORE_PATH = join(DATA_DIR, 'auto-memory-store.json');
 
@@ -51,12 +51,21 @@ class JsonFileBackend {
         if (Array.isArray(data)) {
           for (const entry of data) this.entries.set(entry.id, entry);
         }
-      } catch { /* start fresh */ }
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error('[auto-memory:error]', JSON.stringify({ op: 'initialize', file: this.filePath, code: err.code || 'UNKNOWN' }), err.message);
+        }
+      }
     }
   }
 
   async shutdown() { this._persist(); }
-  async store(entry) { this.entries.set(entry.id, entry); this._persist(); }
+  async store(entry) {
+    if (entry.namespace === 'all') throw new Error('store: namespace cannot be "all" (reserved for queries)');
+    if (!entry.id) throw new Error('store: entry.id is required');
+    this.entries.set(entry.id, entry);
+    this._persist();
+  }
   async get(id) { return this.entries.get(id) ?? null; }
   async getByKey(key, ns) {
     for (const e of this.entries.values()) {
@@ -65,6 +74,7 @@ class JsonFileBackend {
     return null;
   }
   async update(id, updates) {
+    if (updates.namespace === 'all') throw new Error('update: namespace cannot be "all" (reserved for queries)');
     const e = this.entries.get(id);
     if (!e) return null;
     if (updates.metadata) Object.assign(e.metadata, updates.metadata);
@@ -121,8 +131,12 @@ class JsonFileBackend {
 
   _persist() {
     try {
-      writeFileSync(this.filePath, JSON.stringify([...this.entries.values()], null, 2), 'utf-8');
-    } catch { /* best effort */ }
+      const tmpPath = this.filePath + '.tmp';
+      writeFileSync(tmpPath, JSON.stringify([...this.entries.values()], null, 2), 'utf-8');
+      renameSync(tmpPath, this.filePath);
+    } catch (err) {
+      console.error('[auto-memory:error]', JSON.stringify({ op: 'persist', file: this.filePath, code: err.code || 'UNKNOWN' }), err.message);
+    }
   }
 }
 
@@ -156,39 +170,104 @@ async function loadMemoryPackage() {
 }
 
 // ============================================================================
-// Read config from .claude-flow/config.yaml
+// Read config from .claude-flow/config.json (YAML fallback for migration)
 // ============================================================================
 
 function readConfig() {
-  const configPath = join(PROJECT_ROOT, '.claude-flow', 'config.yaml');
   const defaults = {
+    backend: 'hybrid',
     learningBridge: { enabled: true, sonaMode: 'balanced', confidenceDecayRate: 0.005, accessBoostAmount: 0.03, consolidationThreshold: 10 },
     memoryGraph: { enabled: true, pageRankDamping: 0.85, maxNodes: 5000, similarityThreshold: 0.8 },
     agentScopes: { enabled: true, defaultScope: 'project' },
+    syncMode: 'on-session-end',
+    minConfidence: 0.7,
   };
 
-  if (!existsSync(configPath)) return defaults;
+  // Primary: read .claude-flow/config.json
+  const jsonPath = join(PROJECT_ROOT, '.claude-flow', 'config.json');
+  if (existsSync(jsonPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(jsonPath, 'utf-8'));
+      const mem = cfg.memory || {};
+      if (['hybrid', 'json', 'sqlite', 'agentdb'].includes(mem.backend)) defaults.backend = mem.backend;
+      if (mem.learningBridge) Object.assign(defaults.learningBridge, mem.learningBridge);
+      if (mem.memoryGraph) Object.assign(defaults.memoryGraph, mem.memoryGraph);
+      if (mem.agentScopes) Object.assign(defaults.agentScopes, mem.agentScopes);
+      if (mem.syncMode) defaults.syncMode = mem.syncMode;
+      if (typeof mem.minConfidence === 'number') defaults.minConfidence = mem.minConfidence;
+      return defaults;
+    } catch (err) {
+      dim(`[config:error] Failed to parse config.json: ${err.message}`);
+    }
+  }
 
+  // Fallback: read config.yaml for backward compat (one-time migration)
+  const yamlPath = join(PROJECT_ROOT, '.claude-flow', 'config.yaml');
+  if (existsSync(yamlPath)) {
+    try {
+      const yaml = readFileSync(yamlPath, 'utf-8');
+      // Minimal YAML extraction — just enough to migrate to JSON
+      const getBool = (key) => {
+        const match = yaml.match(new RegExp(`${key}:\\s*(true|false)`, 'i'));
+        return match ? match[1] === 'true' : undefined;
+      };
+      const getStr = (key) => {
+        const match = yaml.match(new RegExp(`${key}:\\s*([\\w-]+)`, 'i'));
+        return match ? match[1] : undefined;
+      };
+
+      const parsedBackend = getStr('backend');
+      if (parsedBackend && ['hybrid', 'json', 'sqlite', 'agentdb'].includes(parsedBackend)) {
+        defaults.backend = parsedBackend;
+      }
+      const lbEnabled = getBool('learningBridge[\\s\\S]*?enabled');
+      if (lbEnabled !== undefined) defaults.learningBridge.enabled = lbEnabled;
+      const mgEnabled = getBool('memoryGraph[\\s\\S]*?enabled');
+      if (mgEnabled !== undefined) defaults.memoryGraph.enabled = mgEnabled;
+      const asEnabled = getBool('agentScopes[\\s\\S]*?enabled');
+      if (asEnabled !== undefined) defaults.agentScopes.enabled = asEnabled;
+      defaults.syncMode = getStr('syncMode') || defaults.syncMode;
+
+      dim('[config] Read from config.yaml (legacy). Run "cf-guidance install --force" to generate config.json.');
+      return defaults;
+    } catch {
+      return defaults;
+    }
+  }
+
+  return defaults;
+}
+
+// ============================================================================
+// Backend factory (fail-loud when non-JSON backend is unavailable)
+// ============================================================================
+
+function createBackend(config, memPkg) {
+  if (config.backend === 'json') {
+    return { backend: new JsonFileBackend(STORE_PATH), isHybrid: false };
+  }
+  if (!memPkg.HybridBackend) {
+    throw new Error(
+      `Memory backend '${config.backend}' requires HybridBackend but it is not exported.\n` +
+      `Fix: Run 'npx @claude-flow/cli doctor --install'\n` +
+      `  Or: set "memory.backend": "json" in .claude-flow/config.json`
+    );
+  }
+  const swarmDir = join(PROJECT_ROOT, '.swarm');
+  if (!existsSync(swarmDir)) mkdirSync(swarmDir, { recursive: true });
   try {
-    const yaml = readFileSync(configPath, 'utf-8');
-    // Simple YAML parser for the memory section
-    const getBool = (key) => {
-      const match = yaml.match(new RegExp(`${key}:\\s*(true|false)`, 'i'));
-      return match ? match[1] === 'true' : undefined;
-    };
-
-    const lbEnabled = getBool('learningBridge[\\s\\S]*?enabled');
-    if (lbEnabled !== undefined) defaults.learningBridge.enabled = lbEnabled;
-
-    const mgEnabled = getBool('memoryGraph[\\s\\S]*?enabled');
-    if (mgEnabled !== undefined) defaults.memoryGraph.enabled = mgEnabled;
-
-    const asEnabled = getBool('agentScopes[\\s\\S]*?enabled');
-    if (asEnabled !== undefined) defaults.agentScopes.enabled = asEnabled;
-
-    return defaults;
-  } catch {
-    return defaults;
+    const backend = new memPkg.HybridBackend({
+      sqlite: { databasePath: join(swarmDir, 'hybrid-memory.db') },
+      agentdb: { dbPath: join(swarmDir, 'agentdb-memory.db') },
+      dualWrite: config.backend === 'hybrid',
+    });
+    return { backend, isHybrid: true };
+  } catch (err) {
+    throw new Error(
+      `HybridBackend failed to initialize: ${err.message}\n` +
+      `Fix: Run 'npx @claude-flow/cli doctor --install'\n` +
+      `  Or: set "memory.backend": "json" in .claude-flow/config.json`
+    );
   }
 }
 
@@ -206,12 +285,17 @@ async function doImport() {
   }
 
   const config = readConfig();
-  const backend = new JsonFileBackend(STORE_PATH);
+  const { backend, isHybrid } = createBackend(config, memPkg);
   await backend.initialize();
+
+  const _shutdownBackend = () => { try { backend._persist(); } catch {} };
+  process.on('exit', _shutdownBackend);
+  process.on('SIGTERM', _shutdownBackend);
+  process.on('SIGINT', _shutdownBackend);
 
   const bridgeConfig = {
     workingDir: PROJECT_ROOT,
-    syncMode: 'on-session-end',
+    syncMode: config.syncMode || 'on-session-end',
   };
 
   // Wire learning if enabled and available
@@ -246,6 +330,9 @@ async function doImport() {
     dim(`Import failed (non-critical): ${err.message}`);
   }
 
+  process.removeListener('exit', _shutdownBackend);
+  process.removeListener('SIGTERM', _shutdownBackend);
+  process.removeListener('SIGINT', _shutdownBackend);
   await backend.shutdown();
 }
 
@@ -259,19 +346,27 @@ async function doSync() {
   }
 
   const config = readConfig();
-  const backend = new JsonFileBackend(STORE_PATH);
+  const { backend, isHybrid } = createBackend(config, memPkg);
   await backend.initialize();
+
+  const _shutdownBackend = () => { try { backend._persist(); } catch {} };
+  process.on('exit', _shutdownBackend);
+  process.on('SIGTERM', _shutdownBackend);
+  process.on('SIGINT', _shutdownBackend);
 
   const entryCount = await backend.count();
   if (entryCount === 0) {
     dim('No entries to sync');
+    process.removeListener('exit', _shutdownBackend);
+    process.removeListener('SIGTERM', _shutdownBackend);
+    process.removeListener('SIGINT', _shutdownBackend);
     await backend.shutdown();
     return;
   }
 
   const bridgeConfig = {
     workingDir: PROJECT_ROOT,
-    syncMode: 'on-session-end',
+    syncMode: config.syncMode || 'on-session-end',
   };
 
   if (config.learningBridge.enabled && memPkg.LearningBridge) {
@@ -305,6 +400,9 @@ async function doSync() {
   }
 
   if (bridge.destroy) bridge.destroy();
+  process.removeListener('exit', _shutdownBackend);
+  process.removeListener('SIGTERM', _shutdownBackend);
+  process.removeListener('SIGINT', _shutdownBackend);
   await backend.shutdown();
 }
 

@@ -4,6 +4,7 @@ import {
   GUIDANCE_PACKAGE_SCRIPTS,
   GUIDANCE_PACKAGE_DEPS,
   buildHookDefaults,
+  buildConfigJson,
 } from '../src/default-settings.mjs';
 
 // ---------------------------------------------------------------------------
@@ -190,5 +191,151 @@ describe('buildHookDefaults', () => {
     expect(defaults.PreCompact[0].hooks[0].command).toContain('compact-manual');
     expect(defaults.PreCompact[1].matcher).toBe('auto');
     expect(defaults.PreCompact[1].hooks[0].command).toContain('compact-auto');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildConfigJson
+// ---------------------------------------------------------------------------
+describe('buildConfigJson', () => {
+  it('returns defaults when called with no arguments', () => {
+    const cfg = buildConfigJson();
+    expect(cfg.version).toBe('3.0.0');
+    expect(cfg.memory.backend).toBe('hybrid');
+    expect(cfg.memory.enableHNSW).toBe(true);
+    expect(cfg.memory.cacheSize).toBe(100);
+    expect(cfg.memory.learningBridge.enabled).toBe(true);
+    expect(cfg.memory.learningBridge.sonaMode).toBe('balanced');
+    expect(cfg.memory.learningBridge.confidenceDecayRate).toBe(0.005);
+    expect(cfg.memory.learningBridge.accessBoostAmount).toBe(0.03);
+    expect(cfg.memory.learningBridge.consolidationThreshold).toBe(10);
+    expect(cfg.memory.memoryGraph.enabled).toBe(true);
+    expect(cfg.memory.memoryGraph.pageRankDamping).toBe(0.85);
+    expect(cfg.memory.memoryGraph.maxNodes).toBe(5000);
+    expect(cfg.memory.memoryGraph.similarityThreshold).toBe(0.8);
+    expect(cfg.memory.agentScopes.enabled).toBe(true);
+    expect(cfg.memory.agentScopes.defaultScope).toBe('project');
+    expect(cfg.neural.enabled).toBe(true);
+    expect(cfg.neural.modelPath).toBe('.claude-flow/neural');
+    expect(cfg.hooks.enabled).toBe(true);
+    expect(cfg.hooks.autoExecute).toBe(true);
+  });
+
+  it('accepts a string for backwards compatibility', () => {
+    const cfg = buildConfigJson('sqlite');
+    expect(cfg.memory.backend).toBe('sqlite');
+    expect(cfg.memory.enableHNSW).toBe(true);
+  });
+
+  it('accepts backend option', () => {
+    const cfg = buildConfigJson({ backend: 'agentdb' });
+    expect(cfg.memory.backend).toBe('agentdb');
+  });
+
+  it('--no-hnsw disables HNSW', () => {
+    const cfg = buildConfigJson({ enableHNSW: false });
+    expect(cfg.memory.enableHNSW).toBe(false);
+  });
+
+  it('--cache-size sets cache size', () => {
+    const cfg = buildConfigJson({ cacheSize: 500 });
+    expect(cfg.memory.cacheSize).toBe(500);
+  });
+
+  it('--no-learning-bridge disables learning bridge', () => {
+    const cfg = buildConfigJson({ learningBridge: false });
+    expect(cfg.memory.learningBridge.enabled).toBe(false);
+  });
+
+  it('--sona-mode sets SONA mode', () => {
+    const cfg = buildConfigJson({ sonaMode: 'aggressive' });
+    expect(cfg.memory.learningBridge.sonaMode).toBe('aggressive');
+  });
+
+  it('--confidence-decay sets decay rate', () => {
+    const cfg = buildConfigJson({ confidenceDecayRate: 0.01 });
+    expect(cfg.memory.learningBridge.confidenceDecayRate).toBe(0.01);
+  });
+
+  it('--access-boost sets boost amount', () => {
+    const cfg = buildConfigJson({ accessBoostAmount: 0.1 });
+    expect(cfg.memory.learningBridge.accessBoostAmount).toBe(0.1);
+  });
+
+  it('--consolidation-threshold sets threshold', () => {
+    const cfg = buildConfigJson({ consolidationThreshold: 25 });
+    expect(cfg.memory.learningBridge.consolidationThreshold).toBe(25);
+  });
+
+  it('--no-memory-graph disables memory graph', () => {
+    const cfg = buildConfigJson({ memoryGraph: false });
+    expect(cfg.memory.memoryGraph.enabled).toBe(false);
+  });
+
+  it('--pagerank-damping sets damping factor', () => {
+    const cfg = buildConfigJson({ pageRankDamping: 0.9 });
+    expect(cfg.memory.memoryGraph.pageRankDamping).toBe(0.9);
+  });
+
+  it('--max-graph-nodes sets max nodes', () => {
+    const cfg = buildConfigJson({ maxNodes: 10000 });
+    expect(cfg.memory.memoryGraph.maxNodes).toBe(10000);
+  });
+
+  it('--similarity-threshold sets threshold', () => {
+    const cfg = buildConfigJson({ similarityThreshold: 0.95 });
+    expect(cfg.memory.memoryGraph.similarityThreshold).toBe(0.95);
+  });
+
+  it('--no-agent-scopes disables agent scopes', () => {
+    const cfg = buildConfigJson({ agentScopes: false });
+    expect(cfg.memory.agentScopes.enabled).toBe(false);
+  });
+
+  it('--default-scope sets scope', () => {
+    const cfg = buildConfigJson({ defaultScope: 'global' });
+    expect(cfg.memory.agentScopes.defaultScope).toBe('global');
+  });
+
+  it('--no-neural disables neural', () => {
+    const cfg = buildConfigJson({ neuralEnabled: false });
+    expect(cfg.neural.enabled).toBe(false);
+  });
+
+  it('--neural-model-path sets path', () => {
+    const cfg = buildConfigJson({ neuralModelPath: '/custom/neural' });
+    expect(cfg.neural.modelPath).toBe('/custom/neural');
+  });
+
+  it('hooks.enabled defaults to true', () => {
+    const cfg = buildConfigJson({ hooksEnabled: false });
+    expect(cfg.hooks.enabled).toBe(false);
+  });
+
+  it('--no-hooks-auto-execute disables auto-execute', () => {
+    const cfg = buildConfigJson({ hooksAutoExecute: false });
+    expect(cfg.hooks.autoExecute).toBe(false);
+  });
+
+  it('multiple options combine correctly', () => {
+    const cfg = buildConfigJson({
+      backend: 'sqlite',
+      enableHNSW: false,
+      cacheSize: 200,
+      learningBridge: false,
+      memoryGraph: false,
+      neuralEnabled: false,
+      hooksAutoExecute: false,
+    });
+    expect(cfg.memory.backend).toBe('sqlite');
+    expect(cfg.memory.enableHNSW).toBe(false);
+    expect(cfg.memory.cacheSize).toBe(200);
+    expect(cfg.memory.learningBridge.enabled).toBe(false);
+    expect(cfg.memory.memoryGraph.enabled).toBe(false);
+    expect(cfg.neural.enabled).toBe(false);
+    expect(cfg.hooks.autoExecute).toBe(false);
+    // Unchanged defaults preserved
+    expect(cfg.memory.agentScopes.enabled).toBe(true);
+    expect(cfg.hooks.enabled).toBe(true);
   });
 });

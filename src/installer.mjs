@@ -12,6 +12,7 @@ import {
   GUIDANCE_PRESETS,
   resolveComponents,
   buildHookDefaults,
+  buildConfigJson,
 } from './default-settings.mjs';
 import { readJson, ensureDir, writeJson } from './utils.mjs';
 
@@ -233,6 +234,8 @@ export async function installIntoRepo({
   generateKey = false,
   noAutopilot = false,
   dryRun = false,
+  backend,
+  configOptions = {},
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -285,7 +288,7 @@ export async function installIntoRepo({
     if (usesCodexMode(mode) && resolvedSet.has('codex')) {
       wouldWrite.push('.agents/config.toml', 'AGENTS.md');
     }
-    wouldWrite.push('.claude-flow/guidance/components.json', 'CLAUDE.local.md', '.gitignore');
+    wouldWrite.push('.claude-flow/guidance/components.json', '.claude-flow/config.json', 'CLAUDE.local.md', '.gitignore');
 
     return {
       dryRun: true,
@@ -296,6 +299,7 @@ export async function installIntoRepo({
       envVars: mergedEnv,
       hooks: Object.keys(hookDefaults),
       hookTimeout: hookTimeout || 5000,
+      configJson: buildConfigJson({ backend: backend || 'hybrid', ...configOptions }),
     };
   }
 
@@ -395,6 +399,14 @@ export async function installIntoRepo({
   const cfGuidanceDir = resolve(target, '.claude-flow/guidance');
   ensureDir(cfGuidanceDir);
   writeJson(componentsJsonPath, componentsJson);
+
+  // Generate .claude-flow/config.json (canonical runtime config).
+  const configJsonPath = resolve(target, '.claude-flow', 'config.json');
+  const hasConfigOverrides = backend || Object.keys(configOptions).length > 0;
+  if (force || hasConfigOverrides || !existsSync(configJsonPath)) {
+    const configJsonContent = buildConfigJson({ backend: backend || 'hybrid', ...configOptions });
+    writeText(configJsonPath, JSON.stringify(configJsonContent, null, 2) + '\n');
+  }
 
   // Ensure local guidance file and gitignore entries.
   writeMissingStub(
@@ -556,6 +568,8 @@ export async function initRepo({
   generateKey = false,
   noAutopilot = false,
   dryRun = false,
+  backend,
+  configOptions = {},
 }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
@@ -606,6 +620,8 @@ export async function initRepo({
     generateKey,
     noAutopilot,
     dryRun,
+    backend,
+    configOptions,
   });
 
   let verifyReport = null;

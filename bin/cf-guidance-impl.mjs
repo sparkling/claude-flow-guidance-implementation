@@ -3,9 +3,58 @@ import { initRepo, installIntoRepo, verifyRepo } from '../src/installer.mjs';
 
 function usage() {
   console.log(`Usage:
-  cf-guidance init --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--no-dual] [--skip-cf-init] [--no-verify] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
-  cf-guidance install --target <repoPath> [--target-mode both|claude|codex] [--preset minimal|standard|full] [--components trust,proof,...] [--exclude adversarial,codex,...] [--force] [--install-deps] [--fail-closed] [--hook-timeout <ms>] [--event-timeout <ms>] [--generate-key] [--no-autopilot] [--dry-run]
-  cf-guidance verify --target <repoPath> [--target-mode both|claude|codex]
+  cf-guidance init    --target <repoPath> [options]
+  cf-guidance install --target <repoPath> [options]
+  cf-guidance verify  --target <repoPath> [--target-mode both|claude|codex]
+
+General options:
+  --target <path>              Target repository (default: cwd)
+  --target-mode both|claude|codex  Integration mode (default: both)
+  --preset minimal|standard|full   Component preset (default: standard)
+  --components trust,proof,...     Explicit component list
+  --exclude adversarial,codex,...  Exclude components
+  --backend hybrid|json|sqlite|agentdb  Memory backend (default: hybrid)
+  --force                      Overwrite existing files
+  --install-deps               Run npm install after setup
+  --fail-closed                Block on hook errors (GUIDANCE_EVENT_FAIL_CLOSED=1)
+  --hook-timeout <ms>          Per-hook timeout (default: 5000)
+  --event-timeout <ms>         Event wiring timeout (default: 8000)
+  --generate-key               Generate HMAC-SHA256 signing key
+  --no-autopilot               Disable autopilot rule optimization
+  --dry-run                    Preview without writing files
+
+Init-only options:
+  --no-dual                    Disable dual-mode (Claude Code only)
+  --skip-cf-init               Skip @claude-flow/cli init step
+  --no-verify                  Skip post-install verification
+
+Memory config options:
+  --no-hnsw                    Disable HNSW vector indexing
+  --cache-size <n>             Memory cache size (default: 100)
+
+Learning bridge options:
+  --no-learning-bridge         Disable SONA learning bridge
+  --sona-mode <mode>           balanced|aggressive|conservative (default: balanced)
+  --confidence-decay <rate>    Confidence decay rate (default: 0.005)
+  --access-boost <amount>      Access boost amount (default: 0.03)
+  --consolidation-threshold <n>  Consolidation threshold (default: 10)
+
+Memory graph options:
+  --no-memory-graph            Disable memory graph
+  --pagerank-damping <n>       PageRank damping factor (default: 0.85)
+  --max-graph-nodes <n>        Maximum graph nodes (default: 5000)
+  --similarity-threshold <n>   Similarity threshold (default: 0.8)
+
+Agent scope options:
+  --no-agent-scopes            Disable agent scopes
+  --default-scope <scope>      Default agent scope (default: project)
+
+Neural options:
+  --no-neural                  Disable neural subsystem
+  --neural-model-path <path>   Neural model path (default: .claude-flow/neural)
+
+Hook config options:
+  --no-hooks-auto-execute      Disable hooks auto-execute
 `);
 }
 
@@ -49,6 +98,26 @@ async function main() {
   const generateKey = hasFlag(args, '--generate-key');
   const noAutopilot = hasFlag(args, '--no-autopilot');
   const dryRun = hasFlag(args, '--dry-run');
+  const backend = getFlagValue(args, '--backend', undefined);
+
+  // Fine-grained config.json options
+  const configOptions = {};
+  if (hasFlag(args, '--no-hnsw')) configOptions.enableHNSW = false;
+  if (getFlagValue(args, '--cache-size')) configOptions.cacheSize = Number(getFlagValue(args, '--cache-size'));
+  if (hasFlag(args, '--no-learning-bridge')) configOptions.learningBridge = false;
+  if (getFlagValue(args, '--sona-mode')) configOptions.sonaMode = getFlagValue(args, '--sona-mode');
+  if (getFlagValue(args, '--confidence-decay')) configOptions.confidenceDecayRate = Number(getFlagValue(args, '--confidence-decay'));
+  if (getFlagValue(args, '--access-boost')) configOptions.accessBoostAmount = Number(getFlagValue(args, '--access-boost'));
+  if (getFlagValue(args, '--consolidation-threshold')) configOptions.consolidationThreshold = Number(getFlagValue(args, '--consolidation-threshold'));
+  if (hasFlag(args, '--no-memory-graph')) configOptions.memoryGraph = false;
+  if (getFlagValue(args, '--pagerank-damping')) configOptions.pageRankDamping = Number(getFlagValue(args, '--pagerank-damping'));
+  if (getFlagValue(args, '--max-graph-nodes')) configOptions.maxNodes = Number(getFlagValue(args, '--max-graph-nodes'));
+  if (getFlagValue(args, '--similarity-threshold')) configOptions.similarityThreshold = Number(getFlagValue(args, '--similarity-threshold'));
+  if (hasFlag(args, '--no-agent-scopes')) configOptions.agentScopes = false;
+  if (getFlagValue(args, '--default-scope')) configOptions.defaultScope = getFlagValue(args, '--default-scope');
+  if (hasFlag(args, '--no-neural')) configOptions.neuralEnabled = false;
+  if (getFlagValue(args, '--neural-model-path')) configOptions.neuralModelPath = getFlagValue(args, '--neural-model-path');
+  if (hasFlag(args, '--no-hooks-auto-execute')) configOptions.hooksAutoExecute = false;
 
   if (command === 'init') {
     // CLI default: 'standard' preset for fresh installs when no flags given
@@ -70,6 +139,8 @@ async function main() {
       generateKey,
       noAutopilot,
       dryRun,
+      backend,
+      configOptions,
     });
     console.log(JSON.stringify(result, null, 2));
     return;
@@ -92,6 +163,8 @@ async function main() {
       generateKey,
       noAutopilot,
       dryRun,
+      backend,
+      configOptions,
     });
     console.log(JSON.stringify(result, null, 2));
     return;

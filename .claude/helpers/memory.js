@@ -10,20 +10,35 @@ const path = require('path');
 const MEMORY_DIR = path.join(process.cwd(), '.claude-flow', 'data');
 const MEMORY_FILE = path.join(MEMORY_DIR, 'memory.json');
 
+function sleepSync(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* busy wait */ }
+}
+
 function loadMemory() {
-  try {
-    if (fs.existsSync(MEMORY_FILE)) {
-      return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf-8'));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      if (fs.existsSync(MEMORY_FILE)) {
+        return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf-8'));
+      }
+      return {};
+    } catch (err) {
+      if (err.code === 'ENOENT') return {};
+      if ((err.code === 'EBUSY' || err.code === 'EACCES') && attempt < 2) {
+        sleepSync(50);
+        continue;
+      }
+      console.error('[memory:error]', JSON.stringify({ op: 'loadMemory', file: MEMORY_FILE, code: err.code }), err.message);
     }
-  } catch (e) {
-    // Ignore
   }
   return {};
 }
 
 function saveMemory(memory) {
   fs.mkdirSync(MEMORY_DIR, { recursive: true });
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 2));
+  const tmpPath = MEMORY_FILE + '.tmp';
+  fs.writeFileSync(tmpPath, JSON.stringify(memory, null, 2));
+  fs.renameSync(tmpPath, MEMORY_FILE);
 }
 
 const commands = {

@@ -48,7 +48,13 @@ function ensureDataDir() {
 function readJSON(filePath) {
   try {
     if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch { /* corrupt file — start fresh */ }
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      const backupPath = filePath + '.corrupt.' + Date.now();
+      try { fs.renameSync(filePath, backupPath); } catch {}
+      console.error(`[intelligence:error] Corrupt file backed up to ${backupPath}: ${err.message}`);
+    }
+  }
   return null;
 }
 
@@ -80,6 +86,32 @@ function jaccardSimilarity(setA, setB) {
   return intersection / (setA.size + setB.size - intersection);
 }
 
+function validateNamespace(ns, operation) {
+  if (ns === 'all') {
+    console.error(`[intelligence:warn] ${operation}: namespace 'all' is reserved for queries, using 'default'`);
+    return 'default';
+  }
+  return ns || 'default';
+}
+
+function getConfigThresholds() {
+  const defaults = { minThreshold: 0.05, alpha: 0.6, decayRate: 0.005 };
+  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.yaml');
+  if (!fs.existsSync(cfgPath)) return defaults;
+  try {
+    const content = fs.readFileSync(cfgPath, 'utf-8');
+    const getVal = (key) => {
+      const m = content.match(new RegExp(key + ':\\s*([\\d.]+)'));
+      return m ? parseFloat(m[1]) : null;
+    };
+    return {
+      minThreshold: getVal('minThreshold') ?? defaults.minThreshold,
+      alpha: getVal('contentMatchWeight') ?? defaults.alpha,
+      decayRate: getVal('confidenceDecayRate') ?? defaults.decayRate,
+    };
+  } catch { return defaults; }
+}
+
 // ── Session state helpers ────────────────────────────────────────────────────
 
 function sessionGet(key) {
@@ -101,7 +133,9 @@ function sessionSet(key, value) {
     session.context[key] = value;
     session.updatedAt = new Date().toISOString();
     fs.writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2), 'utf-8');
-  } catch { /* best effort */ }
+  } catch (err) {
+    console.error('[intelligence:error]', JSON.stringify({ op: 'sessionSet', key, code: err.code || 'UNKNOWN' }), err.message);
+  }
 }
 
 // ── PageRank ─────────────────────────────────────────────────────────────────
@@ -163,7 +197,7 @@ function buildEdges(entries) {
   const byCategory = {};
 
   for (const entry of entries) {
-    const cat = entry.category || entry.namespace || 'default';
+    const cat = validateNamespace(entry.category || entry.namespace, 'buildEdges');
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(entry);
   }
@@ -246,7 +280,11 @@ function bootstrapFromMemoryFiles() {
             parseMemoryDir(memDir, entries);
           }
         }
-      } catch { /* skip */ }
+      } catch (err) {
+        if (err.code !== 'ENOENT' && err.code !== 'EACCES') {
+          console.error(`[intelligence:error] bootstrapFromMemoryFiles: ${err.message}`);
+        }
+      }
     } else if (fs.existsSync(base)) {
       parseMemoryDir(base, entries);
     }
@@ -284,7 +322,11 @@ function parseMemoryDir(dir, entries) {
         });
       }
     }
-  } catch { /* skip unreadable dirs */ }
+  } catch (err) {
+    if (err.code !== 'ENOENT' && err.code !== 'EACCES') {
+      console.error(`[intelligence:error] bootstrapFromMemoryFiles: ${err.message}`);
+    }
+  }
 }
 
 // ── Exported functions ───────────────────────────────────────────────────────
@@ -295,6 +337,18 @@ function parseMemoryDir(dir, entries) {
  * If store is empty, bootstraps from MEMORY.md files directly.
  */
 function init() {
+  // Gate on neural.enabled from config.yaml
+  const cfgPath = path.join(process.cwd(), '.claude-flow', 'config.yaml');
+  if (fs.existsSync(cfgPath)) {
+    try {
+      const cfgContent = fs.readFileSync(cfgPath, 'utf-8');
+      const neuralMatch = cfgContent.match(/neural:\s*\n(?:[ \t]+.*\n)*?[ \t]+enabled:\s*(\S+)/m);
+      if (neuralMatch && neuralMatch[1] === 'false') {
+        return { nodes: 0, edges: 0, message: 'Skipped: neural.enabled=false in config' };
+      }
+    } catch { /* proceed with defaults */ }
+  }
+
   ensureDataDir();
 
   // Check if graph-state.json is fresh (within 60s of store)
@@ -330,7 +384,7 @@ function init() {
     const id = entry.id || entry.key || `entry-${Math.random().toString(36).slice(2, 8)}`;
     nodes[id] = {
       id,
-      category: entry.namespace || entry.type || 'default',
+      category: validateNamespace(entry.namespace || entry.type, 'init'),
       confidence: (entry.metadata && entry.metadata.confidence) || 0.5,
       accessCount: (entry.metadata && entry.metadata.accessCount) || 0,
       createdAt: entry.createdAt || Date.now(),
@@ -406,8 +460,9 @@ function getContext(prompt) {
   if (promptWords.length === 0) return null;
   const promptTrigrams = trigrams(promptWords);
 
-  const ALPHA = 0.6; // content match weight
-  const MIN_THRESHOLD = 0.05;
+  const thresholds = getConfigThresholds();
+  const ALPHA = thresholds.alpha;
+  const MIN_THRESHOLD = thresholds.minThreshold;
   const TOP_K = 5;
 
   // Score each entry
@@ -546,7 +601,7 @@ function consolidate() {
             key: `frequent-edit-${path.basename(file)}`,
             content: `File ${file} was edited ${count} times this session — likely a hot path worth monitoring.`,
             summary: `Frequently edited: ${path.basename(file)} (${count}x)`,
-            namespace: 'insights',
+            namespace: validateNamespace('insights', 'consolidate'),
             type: 'procedural',
             metadata: { sourceFile: file, editCount: count, autoGenerated: true },
             createdAt: Date.now(),
@@ -563,12 +618,13 @@ function consolidate() {
   // 2. Confidence decay for unaccessed entries
   const graph = readJSON(GRAPH_PATH);
   if (graph && graph.nodes) {
+    const thresholds = getConfigThresholds();
     const now = Date.now();
     for (const id of Object.keys(graph.nodes)) {
       const node = graph.nodes[id];
       const hoursSinceCreation = (now - (node.createdAt || now)) / (1000 * 60 * 60);
       if (node.accessCount === 0 && hoursSinceCreation > 24) {
-        node.confidence = Math.max(0.05, (node.confidence || 0.5) - 0.005 * Math.floor(hoursSinceCreation / 24));
+        node.confidence = Math.max(0.05, (node.confidence || 0.5) - thresholds.decayRate * Math.floor(hoursSinceCreation / 24));
       }
     }
   }

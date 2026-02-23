@@ -15,7 +15,7 @@
         "CLAUDE_FLOW_MAX_AGENTS": "15",
         "CLAUDE_FLOW_MEMORY_BACKEND": "hybrid"
       },
-      "autoStart": false
+      "autoStart": true
     },
     "ruv-swarm": {
       "command": "npx",
@@ -26,7 +26,7 @@
         "start",
         "--stability"
       ],
-      "autoStart": false
+      "autoStart": true
     },
     "ruvector": {
       "command": "npx",
@@ -36,7 +36,7 @@
         "mcp",
         "start"
       ],
-      "autoStart": false
+      "autoStart": true
     }
   }
 }

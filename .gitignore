@@ -7,6 +7,7 @@ ruvector.db
 .claude-flow/data/
 .claude-flow/logs/
 .claude-flow/sessions/
+.claude-flow/guidance/hook-task-cache.json
 
 # Codex local configuration
 .codex/

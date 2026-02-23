@@ -151,12 +151,12 @@ class HybridMemoryBackend {
       mmap: true
     });
 
-    // AgentDB for vector embeddings and semantic search
+    // AgentDB v3 for vector embeddings and semantic search (RVF unified storage)
     this.agentdb = new AgentDBBackend({
       dimensions: 1536,        // OpenAI embedding dimensions
       metric: 'cosine',
-      indexType: 'hnsw',
-      quantization: 'int8'
+      vectorBackend: 'rvf',    // Unified .rvf single-file storage
+      enableLearning: true     // SelfLearningRvfBackend for contrastive training
     });
 
     // Unified query interface

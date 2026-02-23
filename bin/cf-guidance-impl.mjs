@@ -55,6 +55,13 @@ Neural options:
 
 Hook config options:
   --no-hooks-auto-execute      Disable hooks auto-execute
+
+AgentDB v3 options:
+  --agentdb-backend <type>       AgentDB vector backend (default: rvf)
+  --enable-agentdb-learning      Enable AgentDB self-learning (default: true)
+  --no-agentdb-learning          Disable AgentDB self-learning
+  --learning-batch-size <n>      Self-learning batch size (default: 32)
+  --learning-tick-interval <ms>  Self-learning tick interval (default: 30000)
 `);
 }
 
@@ -118,6 +125,10 @@ async function main() {
   if (hasFlag(args, '--no-neural')) configOptions.neuralEnabled = false;
   if (getFlagValue(args, '--neural-model-path')) configOptions.neuralModelPath = getFlagValue(args, '--neural-model-path');
   if (hasFlag(args, '--no-hooks-auto-execute')) configOptions.hooksAutoExecute = false;
+  if (getFlagValue(args, '--agentdb-backend')) configOptions.agentdbVectorBackend = getFlagValue(args, '--agentdb-backend');
+  if (hasFlag(args, '--no-agentdb-learning')) configOptions.agentdbEnableLearning = false;
+  if (getFlagValue(args, '--learning-batch-size')) configOptions.agentdbBatchSize = Number(getFlagValue(args, '--learning-batch-size'));
+  if (getFlagValue(args, '--learning-tick-interval')) configOptions.agentdbTickInterval = Number(getFlagValue(args, '--learning-tick-interval'));
 
   if (command === 'init') {
     // CLI default: 'standard' preset for fresh installs when no flags given

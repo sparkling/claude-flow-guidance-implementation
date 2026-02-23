@@ -247,6 +247,13 @@ export function buildConfigJson(options = {}) {
     // Hooks
     hooksEnabled = true,
     hooksAutoExecute = true,
+    // AgentDB v3
+    agentdbVectorBackend = 'rvf',
+    agentdbEnableLearning = true,
+    agentdbPositiveThreshold = 0.7,
+    agentdbNegativeThreshold = 0.3,
+    agentdbBatchSize = 32,
+    agentdbTickInterval = 30000,
   } = opts;
 
   return {
@@ -271,6 +278,14 @@ export function buildConfigJson(options = {}) {
       agentScopes: {
         enabled: agentScopes,
         defaultScope,
+      },
+      agentdb: {
+        vectorBackend: agentdbVectorBackend,
+        enableLearning: agentdbEnableLearning,
+        learningPositiveThreshold: agentdbPositiveThreshold,
+        learningNegativeThreshold: agentdbNegativeThreshold,
+        learningBatchSize: agentdbBatchSize,
+        learningTickInterval: agentdbTickInterval,
       },
     },
     neural: {

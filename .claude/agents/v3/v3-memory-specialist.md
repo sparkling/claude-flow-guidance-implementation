@@ -92,7 +92,7 @@ class UnifiedMemoryService implements IMemoryBackend {
   ) {}
 
   async store(entry: MemoryEntry): Promise<void> {
-    // Store in AgentDB with HNSW indexing
+    // Store in AgentDB v3 with RVF unified storage + HNSW indexing
     await this.agentdb.store(entry);
     await this.indexer.index(entry);
   }

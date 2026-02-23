@@ -317,6 +317,26 @@ describe('buildConfigJson', () => {
     expect(cfg.hooks.autoExecute).toBe(false);
   });
 
+  it('returns agentdb v3 defaults', () => {
+    const cfg = buildConfigJson();
+    expect(cfg.memory.agentdb.vectorBackend).toBe('rvf');
+    expect(cfg.memory.agentdb.enableLearning).toBe(true);
+    expect(cfg.memory.agentdb.learningPositiveThreshold).toBe(0.7);
+    expect(cfg.memory.agentdb.learningNegativeThreshold).toBe(0.3);
+    expect(cfg.memory.agentdb.learningBatchSize).toBe(32);
+    expect(cfg.memory.agentdb.learningTickInterval).toBe(30000);
+  });
+
+  it('--no-agentdb-learning disables agentdb learning', () => {
+    const cfg = buildConfigJson({ agentdbEnableLearning: false });
+    expect(cfg.memory.agentdb.enableLearning).toBe(false);
+  });
+
+  it('--agentdb-backend sets vector backend', () => {
+    const cfg = buildConfigJson({ agentdbVectorBackend: 'hnsw' });
+    expect(cfg.memory.agentdb.vectorBackend).toBe('hnsw');
+  });
+
   it('multiple options combine correctly', () => {
     const cfg = buildConfigJson({
       backend: 'sqlite',

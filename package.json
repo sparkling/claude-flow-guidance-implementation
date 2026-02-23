@@ -42,6 +42,12 @@
     "./hook-handler": {
       "import": "./src/hook-handler.cjs",
       "require": "./src/hook-handler.cjs"
+    },
+    "./embeddings": {
+      "import": "./src/guidance/embedding-provider.js"
+    },
+    "./memory-gate": {
+      "import": "./src/guidance/memory-write-gate.js"
     }
   },
   "files": [

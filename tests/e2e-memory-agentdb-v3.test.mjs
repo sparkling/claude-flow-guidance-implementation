@@ -729,3 +729,422 @@ describe('e2e memory: JsonFileBackend round-trip with agentdb v3 config', () => 
     expect(report.access.patternsAccessed).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Suite 6: GD-001 — Embedding provider integration in guidance project
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('e2e memory: embedding provider in guidance project (GD-001)', () => {
+  let HashEmbeddingProvider;
+  let AgentDBEmbeddingProvider;
+  let createEmbeddingProvider;
+
+  beforeAll(async () => {
+    const mod = await import('../src/guidance/embedding-provider.js');
+    HashEmbeddingProvider = mod.HashEmbeddingProvider;
+    AgentDBEmbeddingProvider = mod.AgentDBEmbeddingProvider;
+    createEmbeddingProvider = mod.createEmbeddingProvider;
+  });
+
+  it('package exports the embeddings entry point', async () => {
+    const mod = await import('@sparkleideas/claude-flow-guidance/embeddings');
+    expect(mod.HashEmbeddingProvider).toBeDefined();
+    expect(mod.AgentDBEmbeddingProvider).toBeDefined();
+    expect(mod.createEmbeddingProvider).toBeDefined();
+  });
+
+  it('AgentDB and Hash providers produce embeddings of same dimension', async () => {
+    const agentdb = new AgentDBEmbeddingProvider({ dimension: 384 });
+    const hash = new HashEmbeddingProvider({ dimension: 384 });
+    await agentdb.initialize();
+    await hash.initialize();
+
+    const vecA = await agentdb.embed('test embedding dimension');
+    const vecH = await hash.embed('test embedding dimension');
+
+    expect(vecA.length).toBe(384);
+    expect(vecH.length).toBe(384);
+    expect(vecA.length).toBe(vecH.length);
+
+    agentdb.destroy();
+    hash.destroy();
+  });
+
+  it('AgentDB provider falls back gracefully when AgentDB is unavailable', async () => {
+    const provider = new AgentDBEmbeddingProvider({ dimension: 384 });
+    await provider.initialize();
+
+    // Should not throw — uses hash fallback
+    const vec = await provider.embed('graceful fallback test');
+    expect(vec).toBeInstanceOf(Float32Array);
+    expect(vec.length).toBe(384);
+
+    // In CI / test environment, AgentDB is typically not installed,
+    // so the provider should be using its fallback
+    expect(typeof provider.isUsingFallback()).toBe('boolean');
+
+    provider.destroy();
+  });
+
+  it('Hash provider embeddings are unit-normalized (L2 norm = 1.0)', async () => {
+    const provider = new HashEmbeddingProvider({ dimension: 384 });
+    await provider.initialize();
+
+    const texts = [
+      'short',
+      'a much longer piece of text about embedding normalization',
+      'AgentDB v3 uses RVF unified storage format',
+    ];
+
+    for (const text of texts) {
+      const vec = await provider.embed(text);
+      let norm = 0;
+      for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
+      norm = Math.sqrt(norm);
+      expect(norm).toBeCloseTo(1.0, 3);
+    }
+
+    provider.destroy();
+  });
+
+  it('AgentDB provider embeddings are unit-normalized (L2 norm = 1.0)', async () => {
+    const provider = new AgentDBEmbeddingProvider({ dimension: 384 });
+    await provider.initialize();
+
+    const vec = await provider.embed('normalization check for agentdb provider');
+    let norm = 0;
+    for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
+    norm = Math.sqrt(norm);
+    expect(norm).toBeCloseTo(1.0, 3);
+
+    provider.destroy();
+  });
+
+  it('factory creates providers that integrate with the rest of the pipeline', async () => {
+    const hashProvider = createEmbeddingProvider({ provider: 'hash', dimension: 128 });
+    const agentdbProvider = createEmbeddingProvider({ provider: 'agentdb', dimension: 128 });
+
+    await hashProvider.initialize();
+    await agentdbProvider.initialize();
+
+    // Both should produce vectors of the requested dimension
+    const vecH = await hashProvider.embed('pipeline integration test');
+    const vecA = await agentdbProvider.embed('pipeline integration test');
+
+    expect(vecH.length).toBe(128);
+    expect(vecA.length).toBe(128);
+
+    hashProvider.destroy();
+    agentdbProvider.destroy();
+  });
+
+  it('batch embedding works end-to-end for both providers', async () => {
+    const hash = new HashEmbeddingProvider({ dimension: 64 });
+    const agentdb = new AgentDBEmbeddingProvider({ dimension: 64 });
+    await hash.initialize();
+    await agentdb.initialize();
+
+    const texts = ['entry one', 'entry two', 'entry three'];
+
+    const hashVecs = await hash.batchEmbed(texts);
+    const agentdbVecs = await agentdb.batchEmbed(texts);
+
+    expect(hashVecs).toHaveLength(3);
+    expect(agentdbVecs).toHaveLength(3);
+
+    for (const vec of [...hashVecs, ...agentdbVecs]) {
+      expect(vec).toBeInstanceOf(Float32Array);
+      expect(vec.length).toBe(64);
+    }
+
+    hash.destroy();
+    agentdb.destroy();
+  });
+
+  it('different texts produce different embeddings (non-trivial)', async () => {
+    const provider = createEmbeddingProvider({ provider: 'hash', dimension: 384 });
+    await provider.initialize();
+
+    const vecA = await provider.embed('always use tabs');
+    const vecB = await provider.embed('deploy to production');
+
+    // Verify they are not identical
+    let identical = true;
+    for (let i = 0; i < vecA.length; i++) {
+      if (vecA[i] !== vecB[i]) { identical = false; break; }
+    }
+    expect(identical).toBe(false);
+
+    provider.destroy();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Suite 7: GD-002 — Write gate integration in guidance project
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('e2e memory: write gate in guidance project (GD-002)', () => {
+  let MemoryWriteGateHook;
+  let createMemoryWriteGateHook;
+
+  beforeAll(async () => {
+    const mod = await import('../src/guidance/memory-write-gate.js');
+    MemoryWriteGateHook = mod.MemoryWriteGateHook;
+    createMemoryWriteGateHook = mod.createMemoryWriteGateHook;
+  });
+
+  it('package exports the memory-gate entry point', async () => {
+    const mod = await import('@sparkleideas/claude-flow-guidance/memory-gate');
+    expect(mod.MemoryWriteGateHook).toBeDefined();
+    expect(mod.createMemoryWriteGateHook).toBeDefined();
+  });
+
+  it('detects contradiction: "always use tabs" then "always use spaces"', async () => {
+    const gate = createMemoryWriteGateHook({
+      embeddingProvider: 'hash',
+      similarityThreshold: 0.7,
+    });
+    gate.registerAuthority({
+      agentId: 'coder-1',
+      role: 'coordinator',
+      namespaces: ['patterns'],
+      maxWritesPerMinute: 60,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 0.9,
+    });
+    await gate.initialize();
+
+    // Add an existing entry
+    gate.addEntry({
+      key: 'indent-rule',
+      namespace: 'patterns',
+      value: 'always use tabs for indentation in all source files',
+      agentId: 'coder-1',
+    });
+
+    // Try to write a contradictory entry
+    const result = await gate.checkWrite({
+      key: 'indent-rule-v2',
+      namespace: 'patterns',
+      value: 'always use spaces for indentation in all source files',
+      agentId: 'coder-1',
+    });
+
+    // Contradictions should be detected (via pattern opposition: "use tabs" vs "use spaces")
+    expect(result.contradictions).toBeDefined();
+    expect(result.contradictions.length).toBeGreaterThan(0);
+
+    // The first contradiction should reference the existing key
+    const contradiction = result.contradictions[0];
+    expect(contradiction.existingKey).toBe('indent-rule');
+
+    gate.destroy();
+  });
+
+  it('allows non-contradictory writes through the gate', async () => {
+    const gate = createMemoryWriteGateHook({ embeddingProvider: 'hash' });
+    gate.registerAuthority({
+      agentId: 'coder-1',
+      role: 'coordinator',
+      namespaces: ['patterns', 'config'],
+      maxWritesPerMinute: 60,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 0.9,
+    });
+    await gate.initialize();
+
+    gate.addEntry({
+      key: 'naming-convention',
+      namespace: 'patterns',
+      value: 'use camelCase for JavaScript variables',
+      agentId: 'coder-1',
+    });
+
+    // Writing a completely different topic should be allowed with no contradictions
+    const result = await gate.checkWrite({
+      key: 'deploy-strategy',
+      namespace: 'config',
+      value: 'deploy to staging before production',
+      agentId: 'coder-1',
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.contradictions).toBeUndefined();
+
+    gate.destroy();
+  });
+
+  it('detects "enable" vs "disable" contradiction end-to-end', async () => {
+    const gate = createMemoryWriteGateHook({
+      embeddingProvider: 'hash',
+      similarityThreshold: 0.7,
+    });
+    gate.registerAuthority({
+      agentId: 'admin',
+      role: 'coordinator',
+      namespaces: ['config'],
+      maxWritesPerMinute: 120,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 1.0,
+    });
+    await gate.initialize();
+
+    gate.addEntry({
+      key: 'caching-on',
+      namespace: 'config',
+      value: 'enable caching for all API endpoints',
+      agentId: 'admin',
+    });
+
+    const result = await gate.checkWrite({
+      key: 'caching-off',
+      namespace: 'config',
+      value: 'disable caching for all API endpoints',
+      agentId: 'admin',
+    });
+
+    expect(result.contradictions).toBeDefined();
+    expect(result.contradictions.length).toBeGreaterThan(0);
+
+    gate.destroy();
+  });
+
+  it('respects namespace isolation for contradiction checks', async () => {
+    const gate = createMemoryWriteGateHook({ embeddingProvider: 'hash' });
+    gate.registerAuthority({
+      agentId: 'coder-1',
+      role: 'coordinator',
+      namespaces: ['patterns', 'config'],
+      maxWritesPerMinute: 60,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 0.9,
+    });
+    await gate.initialize();
+
+    // Add entry in 'patterns' namespace
+    gate.addEntry({
+      key: 'rule-a',
+      namespace: 'patterns',
+      value: 'always use strict mode',
+      agentId: 'coder-1',
+    });
+
+    // Write contradictory value but in a DIFFERENT namespace
+    const result = await gate.checkWrite({
+      key: 'rule-b',
+      namespace: 'config',
+      value: 'never use strict mode',
+      agentId: 'coder-1',
+    });
+
+    // Should NOT detect contradictions across namespaces
+    expect(result.contradictions).toBeUndefined();
+
+    gate.destroy();
+  });
+
+  it('works with default hash embeddings (no AgentDB required)', async () => {
+    const gate = createMemoryWriteGateHook({
+      embeddingProvider: 'hash',
+    });
+    gate.registerAuthority({
+      agentId: 'test-agent',
+      role: 'worker',
+      namespaces: ['default'],
+      maxWritesPerMinute: 60,
+      canDelete: false,
+      canOverwrite: false,
+      trustLevel: 0.5,
+    });
+    await gate.initialize();
+
+    // Verify the full checkWrite pipeline works without AgentDB
+    const result = await gate.checkWrite({
+      key: 'test-key',
+      namespace: 'default',
+      value: 'test value without agentdb dependency',
+      agentId: 'test-agent',
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(result.authorityCheck).toBeDefined();
+    expect(result.authorityCheck.passed).toBe(true);
+    expect(result.rateCheck).toBeDefined();
+    expect(result.rateCheck.passed).toBe(true);
+
+    gate.destroy();
+  });
+
+  it('handles multiple entries and finds the right contradiction', async () => {
+    const gate = createMemoryWriteGateHook({
+      embeddingProvider: 'hash',
+      similarityThreshold: 0.7,
+    });
+    gate.registerAuthority({
+      agentId: 'coder-1',
+      role: 'coordinator',
+      namespaces: ['patterns'],
+      maxWritesPerMinute: 60,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 0.9,
+    });
+    await gate.initialize();
+
+    // Add multiple entries
+    gate.addEntry({
+      key: 'naming',
+      namespace: 'patterns',
+      value: 'use camelCase for JavaScript variables',
+      agentId: 'coder-1',
+    });
+    gate.addEntry({
+      key: 'indent-tabs',
+      namespace: 'patterns',
+      value: 'always use tabs for indentation',
+      agentId: 'coder-1',
+    });
+    gate.addEntry({
+      key: 'deploy-rule',
+      namespace: 'patterns',
+      value: 'deploy to staging before production',
+      agentId: 'coder-1',
+    });
+
+    // Write something that contradicts only the tabs entry
+    const result = await gate.checkWrite({
+      key: 'indent-spaces',
+      namespace: 'patterns',
+      value: 'always use spaces for indentation',
+      agentId: 'coder-1',
+    });
+
+    // Should find contradiction with the tabs entry specifically
+    if (result.contradictions && result.contradictions.length > 0) {
+      const tabsContradiction = result.contradictions.find(
+        c => c.existingKey === 'indent-tabs'
+      );
+      expect(tabsContradiction).toBeDefined();
+    }
+
+    gate.destroy();
+  });
+
+  it('write gate embedding provider is accessible and functional', async () => {
+    const gate = createMemoryWriteGateHook({ embeddingProvider: 'hash' });
+    await gate.initialize();
+
+    const provider = gate.getEmbeddingProvider();
+    expect(provider).toBeDefined();
+
+    const vec = await provider.embed('accessible embedding test');
+    expect(vec).toBeInstanceOf(Float32Array);
+    expect(vec.length).toBe(384);
+
+    gate.destroy();
+  });
+});

@@ -163,7 +163,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/v3-subsystems/statusline.cjs",
+    "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/helpers/statusline.cjs",
     "refreshMs": 5000,
     "enabled": true
   },

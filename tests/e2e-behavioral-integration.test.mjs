@@ -21,7 +21,7 @@ import { installIntoRepo } from '../src/installer.mjs';
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
-const INTEGRATIONS_SCRIPT = resolve(PROJECT_ROOT, 'src/cli/guidance-integrations.js');
+const INTEGRATIONS_SCRIPT = resolve(PROJECT_ROOT, 'scripts/guidance-integrations.js');
 
 // Fallback CLAUDE.md for projects where init doesn't create one.
 // The phase1 runtime requires it for compilation.

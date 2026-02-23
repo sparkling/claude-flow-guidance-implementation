@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 
-import { createGuidancePhase1Runtime } from '../guidance/phase1-runtime.js';
+import { createGuidancePhase1Runtime } from '../src/guidance/phase1-runtime.js';
 
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()

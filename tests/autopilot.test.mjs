@@ -10,7 +10,7 @@ import {
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const AUTOPILOT = resolve('src/cli/guidance-autopilot.js');
+const AUTOPILOT = resolve('scripts/guidance-autopilot.js');
 
 function runAutopilot(args = [], env = {}) {
   return spawnSync('node', [AUTOPILOT, ...args], {

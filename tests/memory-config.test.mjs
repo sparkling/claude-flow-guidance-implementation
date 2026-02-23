@@ -153,7 +153,7 @@ describe('syncMode configuration', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-      env: { ...process.env, AUTO_MEMORY_PROJECT_ROOT: tmpDir },
+
     });
 
     expect(result.status).toBe(0);
@@ -177,7 +177,7 @@ describe('config.json support', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-      env: { ...process.env, AUTO_MEMORY_PROJECT_ROOT: tmpDir },
+
     });
 
     expect(result.status).toBe(0);
@@ -198,7 +198,7 @@ describe('config.json support', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-      env: { ...process.env, AUTO_MEMORY_PROJECT_ROOT: tmpDir },
+
     });
 
     expect(result.status).toBe(0);
@@ -214,7 +214,7 @@ describe('config.json support', () => {
 
     const result = spawnSync('node', [AUTO_HOOK, 'status'], {
       cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-      env: { ...process.env, AUTO_MEMORY_PROJECT_ROOT: tmpDir },
+
     });
 
     expect(result.status).toBe(0);

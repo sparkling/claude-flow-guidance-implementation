@@ -6,7 +6,7 @@ import {
   writeJson,
   outcomeFromHookResult,
   severityFromThreat,
-} from '../utils.mjs';
+} from '../src/utils.mjs';
 
 function sanitizeDiffLines(input) {
   const value = Number(input);

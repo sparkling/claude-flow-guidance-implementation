@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 
-import { createGuidanceAdvancedRuntime } from '../guidance/advanced-runtime.js';
-import { safeString, parseJson } from '../utils.mjs';
+import { createGuidanceAdvancedRuntime } from '../src/guidance/advanced-runtime.js';
+import { safeString, parseJson } from '../src/utils.mjs';
 import { runEvent } from './event-handlers.js';
 
 const rootDir = resolve(
@@ -11,15 +11,15 @@ const rootDir = resolve(
 
 function usage() {
   console.log(`Usage:
-  node src/cli/guidance-integrations.js status
-  node src/cli/guidance-integrations.js hooks [taskDescription]
-  node src/cli/guidance-integrations.js trust
-  node src/cli/guidance-integrations.js adversarial
-  node src/cli/guidance-integrations.js proof
-  node src/cli/guidance-integrations.js conformance
-  node src/cli/guidance-integrations.js evolution
-  node src/cli/guidance-integrations.js all
-  node src/cli/guidance-integrations.js event <pre-command|pre-edit|pre-task|post-task|post-edit|session-end> [jsonPayload]`);
+  node scripts/guidance-integrations.js status
+  node scripts/guidance-integrations.js hooks [taskDescription]
+  node scripts/guidance-integrations.js trust
+  node scripts/guidance-integrations.js adversarial
+  node scripts/guidance-integrations.js proof
+  node scripts/guidance-integrations.js conformance
+  node scripts/guidance-integrations.js evolution
+  node scripts/guidance-integrations.js all
+  node scripts/guidance-integrations.js event <pre-command|pre-edit|pre-task|post-task|post-edit|session-end> [jsonPayload]`);
 }
 
 function printJson(value) {

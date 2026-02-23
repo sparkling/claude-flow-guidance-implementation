@@ -53,7 +53,7 @@
 - Use `/tests` for test files
 - Use `/docs` for documentation and markdown files
 - Use `/config` for configuration files
-- Use `/src/cli` for CLI entry points
+- Use `/scripts` for CLI scripts and utility entry points
 - Use `/examples` for example code
 
 ## Project Architecture
@@ -67,8 +67,8 @@
 
 ### Project Config
 
-- **Topology**: hierarchical
-- **Max Agents**: 8
+- **Topology**: hierarchical-mesh
+- **Max Agents**: 15
 - **Memory**: hybrid
 - **HNSW**: Enabled
 - **Neural**: Enabled
@@ -158,7 +158,7 @@ npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --
 ```bash
 npx @claude-flow/cli@latest init --wizard
 npx @claude-flow/cli@latest agent spawn -t coder --name my-coder
-npx @claude-flow/cli@latest swarm init --v3-mode
+npx @claude-flow/cli@latest swarm init
 npx @claude-flow/cli@latest memory search --query "authentication patterns"
 npx @claude-flow/cli@latest doctor --fix
 ```

@@ -12,12 +12,9 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = process.env.AUTO_MEMORY_PROJECT_ROOT || join(__dirname, '../..');
+const PROJECT_ROOT = process.cwd();
 const DATA_DIR = join(PROJECT_ROOT, '.claude-flow', 'data');
 const STORE_PATH = join(DATA_DIR, 'auto-memory-store.json');
 
@@ -179,6 +176,7 @@ function readConfig() {
     learningBridge: { enabled: true, sonaMode: 'balanced', confidenceDecayRate: 0.005, accessBoostAmount: 0.03, consolidationThreshold: 10 },
     memoryGraph: { enabled: true, pageRankDamping: 0.85, maxNodes: 5000, similarityThreshold: 0.8 },
     agentScopes: { enabled: true, defaultScope: 'project' },
+    agentdb: { vectorBackend: 'rvf', enableLearning: true, learningPositiveThreshold: 0.7, learningNegativeThreshold: 0.3, learningBatchSize: 32, learningTickInterval: 30000 },
     syncMode: 'on-session-end',
     minConfidence: 0.7,
   };
@@ -193,6 +191,7 @@ function readConfig() {
       if (mem.learningBridge) Object.assign(defaults.learningBridge, mem.learningBridge);
       if (mem.memoryGraph) Object.assign(defaults.memoryGraph, mem.memoryGraph);
       if (mem.agentScopes) Object.assign(defaults.agentScopes, mem.agentScopes);
+      if (mem.agentdb) defaults.agentdb = { ...defaults.agentdb, ...mem.agentdb };
       if (mem.syncMode) defaults.syncMode = mem.syncMode;
       if (typeof mem.minConfidence === 'number') defaults.minConfidence = mem.minConfidence;
       return defaults;
@@ -258,7 +257,11 @@ function createBackend(config, memPkg) {
   try {
     const backend = new memPkg.HybridBackend({
       sqlite: { databasePath: join(swarmDir, 'hybrid-memory.db') },
-      agentdb: { dbPath: join(swarmDir, 'agentdb-memory.db') },
+      agentdb: {
+        dbPath: join(swarmDir, 'agentdb-memory.rvf'),
+        vectorBackend: 'rvf',
+        enableLearning: config.agentdb?.enableLearning !== false,
+      },
       dualWrite: config.backend === 'hybrid',
     });
     return { backend, isHybrid: true };

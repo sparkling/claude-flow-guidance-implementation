@@ -38,13 +38,13 @@ const commands = {
   init:      () => import('./cf-guidance-impl.mjs'),
   install:   () => import('./cf-guidance-impl.mjs'),
   verify:    () => import('./cf-guidance-impl.mjs'),
-  run:       () => import('../src/cli/guidance-integrations.js'),
-  runtime:   () => import('../src/cli/guidance-runtime.js'),
-  autopilot: () => import('../src/cli/guidance-autopilot.js'),
-  benchmark: () => import('../src/cli/guidance-ab-benchmark.js'),
-  codex:     () => import('../src/cli/guidance-codex-bridge.js'),
-  analyze:   () => import('../src/cli/analyze-guidance.js'),
-  scaffold:  () => import('../src/cli/scaffold-guidance.js'),
+  run:       () => import('../scripts/guidance-integrations.js'),
+  runtime:   () => import('../scripts/guidance-runtime.js'),
+  autopilot: () => import('../scripts/guidance-autopilot.js'),
+  benchmark: () => import('../scripts/guidance-ab-benchmark.js'),
+  codex:     () => import('../scripts/guidance-codex-bridge.js'),
+  analyze:   () => import('../scripts/analyze-guidance.js'),
+  scaffold:  () => import('../scripts/scaffold-guidance.js'),
 };
 
 if (commands[subcommand]) {

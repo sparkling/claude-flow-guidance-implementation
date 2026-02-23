@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync, copyFileSync } from 'node
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const BRIDGE = resolve('src/cli/guidance-codex-bridge.js');
+const BRIDGE = resolve('scripts/guidance-codex-bridge.js');
 
 function runBridge(args = [], env = {}) {
   const result = spawnSync('node', [BRIDGE, ...args], {

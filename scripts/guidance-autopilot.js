@@ -14,8 +14,8 @@ import { dirname, resolve } from 'node:path';
 
 import { analyze, benchmark, abBenchmark } from '@claude-flow/guidance/analyzer';
 import { createCompiler } from '@claude-flow/guidance/compiler';
-import { createSyntheticContentAwareExecutor } from '../guidance/content-aware-executor.js';
-import { readJson, writeJson, ensureDir, nowIso } from '../utils.mjs';
+import { createSyntheticContentAwareExecutor } from '../src/guidance/content-aware-executor.js';
+import { readJson, writeJson, ensureDir, nowIso } from '../src/utils.mjs';
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );

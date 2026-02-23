@@ -36,7 +36,6 @@ function writeConfigYaml(yaml) {
 function runHook(cmd) {
   return spawnSync('node', [AUTO_HOOK, cmd], {
     cwd: tmpDir, encoding: 'utf-8', timeout: 10000,
-    env: { ...process.env, AUTO_MEMORY_PROJECT_ROOT: tmpDir },
   });
 }
 
@@ -62,6 +61,13 @@ describe('buildConfigJson()', () => {
     expect(cfg.memory.agentScopes.enabled).toBe(true);
     expect(cfg.neural.enabled).toBe(true);
     expect(cfg.hooks.enabled).toBe(true);
+  });
+
+  it('includes agentdb v3 config', () => {
+    const cfg = buildConfigJson();
+    expect(cfg.memory.agentdb).toBeDefined();
+    expect(cfg.memory.agentdb.vectorBackend).toBe('rvf');
+    expect(cfg.memory.agentdb.enableLearning).toBe(true);
   });
 });
 

@@ -61,11 +61,20 @@
     "test:coverage": "vitest run --coverage",
     "lint": "node ./bin/guidance.mjs verify --target .",
     "swarm:init": "npx @claude-flow/cli@latest swarm init --topology hierarchical --max-agents 8 --strategy specialized",
-    "swarm:route": "npx @claude-flow/cli@latest hooks route --task \"implement reusable guidance integration kit\""
+    "swarm:route": "npx @claude-flow/cli@latest hooks route --task \"implement reusable guidance integration kit\"",
+    "guidance:analyze": "cf-guidance analyze",
+    "guidance:scaffold": "cf-guidance scaffold",
+    "guidance:all": "cf-guidance run all",
+    "guidance:status": "cf-guidance run status",
+    "guidance:hooks": "cf-guidance run hooks",
+    "guidance:trust": "cf-guidance run trust",
+    "guidance:proof": "cf-guidance run proof",
+    "guidance:runtime": "cf-guidance runtime demo"
   },
   "dependencies": {
     "@claude-flow/guidance": "^3.0.0-alpha.1",
-    "@claude-flow/hooks": "^3.0.0-alpha.7"
+    "@claude-flow/hooks": "^3.0.0-alpha.7",
+    "@sparkleideas/claude-flow-guidance": "^3.0.0-alpha.1"
   },
   "keywords": [
     "claude-flow",

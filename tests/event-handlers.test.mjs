@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { GuidanceAdvancedRuntime } from '../src/guidance/advanced-runtime.js';
-import { runEvent } from '../src/cli/event-handlers.js';
+import { runEvent } from '../scripts/event-handlers.js';
 
 function makeTmpDir() {
   const dir = resolve(tmpdir(), `evt-${Date.now()}-${Math.random().toString(36).slice(2)}`);

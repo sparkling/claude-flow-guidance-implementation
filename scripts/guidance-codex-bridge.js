@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-import { safeString, parseJson } from '../utils.mjs';
+import { safeString, parseJson } from '../src/utils.mjs';
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );
@@ -32,7 +32,7 @@ const HOOK_HANDLER_MAP = {
 
 function usage() {
   console.log(`Usage:
-  node src/cli/guidance-codex-bridge.js <event> [options]
+  node scripts/guidance-codex-bridge.js <event> [options]
 
 Events:
   pre-command   --command "<bash command>"
@@ -52,9 +52,9 @@ Common options:
   --skip-cf-hooks
 
 Examples:
-  node src/cli/guidance-codex-bridge.js pre-task --description "Implement auth middleware"
-  node src/cli/guidance-codex-bridge.js pre-command --command "git push --force origin main"
-  node src/cli/guidance-codex-bridge.js post-task --task-id task-123 --status completed`);
+  node scripts/guidance-codex-bridge.js pre-task --description "Implement auth middleware"
+  node scripts/guidance-codex-bridge.js pre-command --command "git push --force origin main"
+  node scripts/guidance-codex-bridge.js post-task --task-id task-123 --status completed`);
 }
 
 function parseArgs(argv) {

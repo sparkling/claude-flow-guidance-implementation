@@ -9,10 +9,10 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.{js,mjs,cjs}'],
       exclude: [
-        'src/cli/analyze-guidance.js',
-        'src/cli/scaffold-guidance.js',
-        'src/cli/guidance-ab-benchmark.js',
-        'src/cli/guidance-runtime.js',
+        'scripts/analyze-guidance.js',
+        'scripts/scaffold-guidance.js',
+        'scripts/guidance-ab-benchmark.js',
+        'scripts/guidance-runtime.js',
       ],
       reporter: ['text', 'text-summary'],
       thresholds: {

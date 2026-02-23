@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { abBenchmark } from '@claude-flow/guidance/analyzer';
-import { createSyntheticContentAwareExecutor } from '../guidance/content-aware-executor.js';
+import { createSyntheticContentAwareExecutor } from '../src/guidance/content-aware-executor.js';
 const rootDir = resolve(
   process.env.GUIDANCE_PROJECT_DIR || process.env.CLAUDE_PROJECT_DIR || process.cwd()
 );

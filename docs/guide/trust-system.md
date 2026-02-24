@@ -88,6 +88,19 @@ outcomes push an agent toward `probation` and then `untrusted`.
 There is no manual tier override. Tier assignment is always derived from the
 cumulative score.
 
+#### Trust-Based Memory Authority
+
+The MemoryWriteGateHook (GD-002) uses trust tiers to control memory write permissions. As an agent's trust score changes, their effective write authority is adjusted:
+
+| Tier | Write Rate | Namespaces | Overwrite | Delete |
+|---|---|---|---|---|
+| Trusted (>= 0.8) | 120 writes/min | All assigned namespaces | Allowed | Allowed |
+| Standard (>= 0.5) | 60 writes/min | Assigned namespaces only | Blocked | Blocked |
+| Probation (>= 0.3) | 30 writes/min | `default` namespace only | Blocked | Blocked |
+| Untrusted (< 0.3) | 0 writes/min | No write access | Blocked | Blocked |
+
+When an agent's trust drops below 0.3, all memory writes are blocked. This prevents compromised or misbehaving agents from corrupting shared knowledge.
+
 ## Trust-based rate limiting
 
 The trust system provides a method to compute an effective rate limit for a
@@ -121,6 +134,7 @@ lifecycle event. The following table summarizes the recording behavior:
 | `pre-task` | `deny` | `allow` or `warn` | Records `deny` if blocked by policy gates. |
 | `post-task` | Derived from result | Derived from result | Outcome is computed from the hook result using `outcomeFromHookResult`. |
 | `post-edit` | -- | `allow` | Always records `allow`. Post-edit is informational and does not block. |
+| Memory write | `MemoryWriteGateHook` | Allowed write: +0.01. Blocked (contradiction or authority): -0.05. Rate-limited: -0.02. |
 
 Each handler also includes the current trust snapshot in its return value:
 
@@ -355,3 +369,11 @@ runtime:
 - **Evolution pipeline**: Rule changes proposed through the evolution pipeline
   do not directly alter trust scores, but new rules may change which actions
   produce `allow`, `warn`, or `deny` outcomes in future evaluations.
+
+#### Example: Trust Degradation Restricts Memory Access
+
+1. Agent `coder-1` starts at trust score **0.5** (Standard tier)
+2. Agent writes `"always use spaces"` to namespace `patterns` — allowed, trust +0.01 = **0.51**
+3. Agent writes `"always use tabs"` to namespace `patterns` — blocked (semantic contradiction with existing entry), trust -0.05 = **0.46**
+4. Multiple violations drop trust to **0.28** (Untrusted tier)
+5. All subsequent writes by `coder-1` are blocked until trust recovers above 0.3

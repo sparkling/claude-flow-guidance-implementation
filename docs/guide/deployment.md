@@ -39,6 +39,11 @@ settings that default to permissive values in development.
 | `GUIDANCE_AUTOPILOT_MIN_AB_GAIN` | `0.05` | Minimum A/B composite gain to proceed with promotion. |
 | `GUIDANCE_CODEX_SKIP_CF_HOOKS` | `0` | Set to `1` to skip secondary `@claude-flow/cli` hook calls in Codex bridge. |
 | `CLAUDE_AGENT_ID` | Per-agent unique ID | Required for multi-agent deployments. Each agent must have a distinct identifier. |
+| `GUIDANCE_EMBEDDING_PROVIDER` | `agentdb` | `hash` or `agentdb`. Selects the embedding provider for shard retrieval and semantic contradiction detection. Use `hash` for development (zero deps), `agentdb` for production (HNSW search). |
+| `GUIDANCE_EMBEDDING_DIMENSION` | `384` | Embedding vector dimension. Must match the model's output dimension. |
+| `GUIDANCE_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Transformer model name. Only used when `GUIDANCE_EMBEDDING_PROVIDER=agentdb`. |
+| `GUIDANCE_MEMORY_GATE_ENABLED` | `1` | Set to `0` to disable the memory write gate. When disabled, all writes pass through unchecked. |
+| `GUIDANCE_SIMILARITY_THRESHOLD` | `0.85` | Cosine similarity threshold for semantic contradiction detection. Lower values catch more contradictions but increase false positives. |
 
 All env vars above are now included in `.claude/settings.json` by default
 when running `cf-guidance-impl init`. The installer merges defaults without
@@ -263,6 +268,17 @@ multiple agents coordinate to circumvent policy (for example, by splitting a
 blocked command across separate tool calls), the collusion detector flags the
 pattern in `threatSignals`.
 
+#### Memory Write Authority
+
+In multi-agent deployments, each agent's trust score affects its memory write permissions through the MemoryWriteGateHook (GD-002). Register authorities at deployment time to control which agents can write to which namespaces:
+
+| Trust Tier | Rate Limit | Namespace Access | Can Overwrite | Can Delete |
+|---|---|---|---|---|
+| Trusted (>= 0.8) | 120/min | All assigned | Yes | Yes |
+| Standard (>= 0.5) | 60/min | Assigned only | No | No |
+| Probation (>= 0.3) | 30/min | `default` only | No | No |
+| Untrusted (< 0.3) | 0/min (blocked) | None | No | No |
+
 ## Team setup
 
 ### Shared rules in CLAUDE.md
@@ -302,6 +318,10 @@ Complete every item before deploying to production.
   Verify by testing a command that contains a token pattern.
 - [ ] The threat detector is active for `pre-command` hooks. Verify by
   running `npm run guidance:adversarial`.
+- [ ] Set `GUIDANCE_EMBEDDING_PROVIDER=agentdb` for semantic shard retrieval
+- [ ] Configure per-agent authorities with appropriate namespace restrictions
+- [ ] Review `GUIDANCE_SIMILARITY_THRESHOLD` (0.85 default) for your contradiction sensitivity requirements
+- [ ] Enable `enableContradictionTracking` for memory write audit trail
 
 ## Production setup checklist
 

@@ -20,12 +20,14 @@ CLI binaries, hook-handler dispatch, and configuration constants.
    - [verifyRepo](#verifyrepo)
 3. [GuidancePhase1Runtime (`./phase1`)](#guidancephase1runtime)
 4. [GuidanceAdvancedRuntime (`./runtime`)](#guidanceadvancedruntime)
-5. [SyntheticContentAwareExecutor (`./executor`)](#syntheticcontentawareexecutor)
-6. [Default settings (`./settings`)](#default-settings)
-7. [Hook handler (`./hook-handler`)](#hook-handler)
-8. [CLI binaries](#cli-binaries)
-9. [Types](#types)
-10. [Changelog](#changelog)
+5. [EmbeddingProvider (`./embedding-provider`)](#embeddingprovider-gd-001)
+6. [MemoryWriteGateHook (`./memory-write-gate`)](#memorywritegatehook-gd-002)
+7. [SyntheticContentAwareExecutor (`./executor`)](#syntheticcontentawareexecutor)
+8. [Default settings (`./settings`)](#default-settings)
+9. [Hook handler (`./hook-handler`)](#hook-handler)
+10. [CLI binaries](#cli-binaries)
+11. [Types](#types)
+12. [Changelog](#changelog)
 
 ---
 
@@ -40,6 +42,8 @@ CLI binaries, hook-handler dispatch, and configuration constants.
 | `./phase1` | `src/guidance/phase1-runtime.js` | ESM |
 | `./executor` | `src/guidance/content-aware-executor.js` | ESM |
 | `./hook-handler` | `src/hook-handler.cjs` | CJS + ESM (dual) |
+| `./embedding-provider` | `createEmbeddingProvider`, `HashEmbeddingProvider`, `AgentDBEmbeddingProvider` |
+| `./memory-write-gate` | `createMemoryWriteGateHook`, `MemoryWriteGateHook` |
 
 Import examples:
 
@@ -558,6 +562,101 @@ const envelope = runtime.appendProof({
 runtime.persistState();
 console.log(runtime.getStatus());
 ```
+
+---
+
+## EmbeddingProvider (GD-001)
+
+`import { createEmbeddingProvider } from 'claude-flow-guidance-implementation/embedding-provider'`
+
+### IEmbeddingProvider Interface
+
+| Method | Signature | Description |
+|---|---|---|
+| `initialize()` | `() => Promise<void>` | One-time async initialisation |
+| `embed(text)` | `(text: string) => Promise<Float32Array>` | Single text to vector |
+| `batchEmbed(texts)` | `(texts: string[]) => Promise<Float32Array[]>` | Batch text to vectors |
+| `dimension()` | `() => number` | Returns embedding dimension (default 384) |
+| `destroy()` | `() => void` | Release resources |
+
+### Implementations
+
+| Class | Provider Key | Description |
+|---|---|---|
+| `HashEmbeddingProvider` | `hash` | Deterministic hash-based embeddings. Zero dependencies. Suitable for tests. |
+| `AgentDBEmbeddingProvider` | `agentdb` | Wraps AgentDB `EmbeddingService` with HNSW indexing. Falls back to hash if AgentDB is unavailable. |
+
+### Factory
+
+`createEmbeddingProvider(options?)` -- Create a provider by name.
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `provider` | `'hash' \| 'agentdb'` | `'agentdb'` | Provider implementation |
+| `dimension` | `number` | `384` | Embedding vector dimension |
+| `model` | `string` | `'Xenova/all-MiniLM-L6-v2'` | Model name (AgentDB only) |
+| `dbPath` | `string \| null` | `null` | Database path (AgentDB only) |
+
+### AgentDBEmbeddingProvider extras
+
+| Method | Description |
+|---|---|
+| `isUsingFallback()` | Returns `true` if AgentDB was unavailable and hash fallback is active |
+
+---
+
+## MemoryWriteGateHook (GD-002)
+
+`import { createMemoryWriteGateHook } from 'claude-flow-guidance-implementation/memory-write-gate'`
+
+Pre-write gate that checks memory writes against authority, rate limits, pattern contradictions, and semantic contradictions before they reach the storage backend.
+
+### Constructor Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `embeddingProvider` | `'hash' \| 'agentdb'` | `'hash'` | Embedding provider for semantic checks |
+| `embeddingDimension` | `number` | `384` | Vector dimension |
+| `similarityThreshold` | `number` | `0.85` | Cosine similarity threshold for contradiction detection |
+| `contradictionThreshold` | `number` | -- | Upstream pattern contradiction threshold |
+| `defaultTtlMs` | `number \| null` | `null` | Default entry TTL |
+| `defaultDecayRate` | `number` | `0` | Default confidence decay rate |
+| `enableContradictionTracking` | `boolean` | `true` | Track contradiction history |
+| `authorities` | `MemoryAuthority[]` | `[]` | Pre-registered agent authorities |
+
+### Methods
+
+| Method | Signature | Description |
+|---|---|---|
+| `initialize()` | `() => Promise<void>` | Initialise embedding provider |
+| `checkWrite(entry)` | `({key, namespace, value, agentId}) => Promise<CheckResult>` | Run all 4 checks on a proposed write |
+| `registerAuthority(auth)` | `(MemoryAuthority) => void` | Register write authority for an agent |
+| `addEntry(entry)` | `({key, namespace, value, agentId?}) => void` | Add existing entry for contradiction checking |
+| `clearEntries()` | `() => void` | Clear all stored entries |
+| `getGate()` | `() => MemoryWriteGate` | Access underlying gate instance |
+| `getEmbeddingProvider()` | `() => IEmbeddingProvider` | Access embedding provider |
+| `destroy()` | `() => void` | Release resources |
+
+### CheckResult
+
+| Field | Type | Description |
+|---|---|---|
+| `allowed` | `boolean` | Whether the write is permitted |
+| `reason` | `string?` | Reason if blocked |
+| `contradictions` | `Array<{existingKey, description, similarity?}>?` | Detected contradictions |
+| `authorityCheck` | `{passed, requiredRole, actualRole}?` | Authority check details |
+| `rateCheck` | `{passed, writesInWindow, limit}?` | Rate limit check details |
+
+### Default Authority (unregistered agents)
+
+| Field | Value |
+|---|---|
+| `role` | `'worker'` |
+| `namespaces` | `['default']` |
+| `maxWritesPerMinute` | `60` |
+| `canDelete` | `false` |
+| `canOverwrite` | `false` |
+| `trustLevel` | `0.5` |
 
 ---
 

@@ -44,41 +44,43 @@ flowchart TB
 
     subgraph Kit["Guidance Implementation Kit"]
         direction TB
-        Settings[".claude/settings.json\nHook definitions + env vars"]:::iface
-        Bridge["guidance-codex-bridge.js\nCLI lifecycle adapter"]:::iface
-        Handler["hook-handler.cjs\nCJS dispatcher\n12 commands"]:::core
-        Helpers["Helper modules\nrouter / session / intelligence"]:::core
+        Settings[".claude/settings.json<br/>Hook definitions + env vars"]:::iface
+        Bridge["guidance-codex-bridge.js<br/>CLI lifecycle adapter"]:::iface
+        Handler["hook-handler.cjs<br/>CJS dispatcher<br/>12 commands"]:::core
+        Helpers["Helper modules<br/>router / session / intelligence"]:::core
 
         subgraph Runtime["Guidance Runtime"]
             direction LR
-            P1["Phase 1\nCompiler + Retriever\nGates + Ledger"]:::core
-            Adv["Advanced\nTrust + Threat\nProof + Evolution"]:::security
+            P1["Phase 1<br/>Compiler + Retriever<br/>Gates + Ledger"]:::core
+            Adv["Advanced<br/>Trust + Threat<br/>Proof + Evolution"]:::security
+            EP["EmbeddingProvider<br/>Hash or AgentDB HNSW"]:::core
+            MWG["MemoryWriteGateHook<br/>Authority + Rate + Semantic"]:::security
         end
 
-        CLI["8 CLI tools\nanalyze / autopilot / benchmark\nintegrations / scaffold / codex"]:::core
-        Installer["cf-guidance-impl\ninit / install / verify"]:::core
+        CLI["8 CLI tools<br/>analyze / autopilot / benchmark<br/>integrations / scaffold / codex"]:::core
+        Installer["cf-guidance-impl<br/>init / install / verify"]:::core
     end
 
     subgraph State["Persistent State"]
         direction LR
-        Policy["CLAUDE.md\nCLAUDE.local.md"]:::data
-        Store[".claude-flow/guidance/\ntrust / proof / cache"]:::data
+        Policy["CLAUDE.md<br/>CLAUDE.local.md"]:::data
+        Store[".claude-flow/guidance/<br/>trust / proof / cache"]:::data
     end
 
     subgraph Deps["External Packages"]
         direction LR
-        GuidancePkg["@claude-flow/guidance\nPolicy engine"]:::ext
-        HooksPkg["@claude-flow/hooks\nHook registry"]:::ext
+        GuidancePkg["@claude-flow/guidance<br/>Policy engine"]:::ext
+        HooksPkg["@claude-flow/hooks<br/>Hook registry"]:::ext
     end
 
-    CC -->|"stdin JSON\n+ hook command"| Settings
+    CC -->|"stdin JSON<br/>+ hook command"| Settings
     CX -->|"CLI commands"| Bridge
     Dev -->|"cf-guidance-impl init"| Installer
 
     Settings --> Handler
     Bridge --> Handler
     Handler --> Helpers
-    Handler -->|"spawnSync\n(blocking)"| Runtime
+    Handler -->|"spawnSync<br/>(blocking)"| Runtime
     P1 --> Adv
 
     Runtime --> Policy
@@ -89,6 +91,9 @@ flowchart TB
     Installer -->|"writes shim"| Handler
     Installer -->|"merges config"| Settings
     CLI --> Runtime
+    EP -.->|"embeds shards"| P1
+    MWG -.->|"pre-write check"| Store
+    EP -.->|"semantic vectors"| MWG
 ```
 
 </details>
@@ -125,28 +130,28 @@ flowchart LR
 
     subgraph ClaudePath["Claude Code Path"]
         direction TB
-        CC["Claude Code\nagent"]:::agent
-        CCHook["settings.json\nPreToolUse / PostToolUse\nSessionStart / SessionEnd"]:::hook
-        CC -->|"tool event\nstdin JSON"| CCHook
+        CC["Claude Code<br/>agent"]:::agent
+        CCHook["settings.json<br/>PreToolUse / PostToolUse<br/>SessionStart / SessionEnd"]:::hook
+        CC -->|"tool event<br/>stdin JSON"| CCHook
     end
 
     subgraph CodexPath["Codex Path"]
         direction TB
-        CX["Codex\nagent"]:::agent
-        CXBridge["guidance-codex-bridge.js\n8 lifecycle commands"]:::hook
-        CX -->|"CLI invocation\n--command / --file / --description"| CXBridge
+        CX["Codex<br/>agent"]:::agent
+        CXBridge["guidance-codex-bridge.js<br/>8 lifecycle commands"]:::hook
+        CX -->|"CLI invocation<br/>--command / --file / --description"| CXBridge
     end
 
-    Handler["hook-handler.cjs\nUnified dispatcher"]:::core
+    Handler["hook-handler.cjs<br/>Unified dispatcher"]:::core
 
-    CCHook -->|"node hook-handler.cjs\npre-bash / pre-edit / ..."| Handler
-    CXBridge -->|"spawnSync\nnormalised stdin JSON"| Handler
+    CCHook -->|"node hook-handler.cjs<br/>pre-bash / pre-edit / ..."| Handler
+    CXBridge -->|"spawnSync<br/>normalised stdin JSON"| Handler
 
     subgraph Dispatch["Handler Dispatch"]
         direction TB
-        Blocking["Blocking (sync)\npre-bash / pre-edit / pre-task\nexit 0 = allow, exit 1 = block"]:::decision
-        Async["Fire-and-forget (async)\npost-edit / post-task / session-end\ndetached child process"]:::core
-        Info["Informational\nroute / status / stats / compact"]:::core
+        Blocking["Blocking (sync)<br/>pre-bash / pre-edit / pre-task<br/>exit 0 = allow, exit 1 = block"]:::decision
+        Async["Fire-and-forget (async)<br/>post-edit / post-task / session-end<br/>detached child process"]:::core
+        Info["Informational<br/>route / status / stats / compact"]:::core
     end
 
     Handler --> Blocking
@@ -335,22 +340,22 @@ flowchart LR
     classDef enforce fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
     classDef output fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
 
-    CMD["CLAUDE.md\n(shared rules)"]:::source
-    LOCAL["CLAUDE.local.md\n(local experiments)"]:::source
+    CMD["CLAUDE.md<br/>(shared rules)"]:::source
+    LOCAL["CLAUDE.local.md<br/>(local experiments)"]:::source
 
-    Compiler["Compiler\nParse Markdown into\ntyped rule objects"]:::process
+    Compiler["Compiler<br/>Parse Markdown into<br/>typed rule objects"]:::process
 
     Bundle["Policy Bundle"]:::data
-    Constitution["Constitution\nHigh-level rules\n+ content hash"]:::data
-    Shards["Shards\nid, text, riskClass\npriority, intents\ndomains, toolClasses"]:::data
+    Constitution["Constitution<br/>High-level rules<br/>+ content hash"]:::data
+    Shards["Shards<br/>id, text, riskClass<br/>priority, intents<br/>domains, toolClasses"]:::data
 
-    Retriever["Retriever\nSemantic shard matching\nby task description"]:::process
+    Retriever["Retriever<br/>Semantic shard matching<br/>by task description"]:::process
 
-    Gates["Gates\nRule enforcement\nEvaluate conditions"]:::enforce
+    Gates["Gates<br/>Rule enforcement<br/>Evaluate conditions"]:::enforce
 
-    Decision["allow / warn / block\n+ messages + warnings"]:::output
+    Decision["allow / warn / block<br/>+ messages + warnings"]:::output
 
-    Ledger["Ledger\nAppend-only audit log\ntaskId, rules, decision, timestamp"]:::output
+    Ledger["Ledger<br/>Append-only audit log<br/>taskId, rules, decision, timestamp"]:::output
 
     CMD --> Compiler
     LOCAL --> Compiler
@@ -358,7 +363,7 @@ flowchart LR
     Bundle --> Constitution
     Bundle --> Shards
     Shards --> Retriever
-    Retriever -->|"matched shards\nfor current operation"| Gates
+    Retriever -->|"matched shards<br/>for current operation"| Gates
     Gates --> Decision
     Gates --> Ledger
 ```
@@ -414,35 +419,49 @@ flowchart TB
     classDef quality fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
     classDef data fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238
 
-    P1["Phase 1 Runtime\nCompiler + Retriever + Gates + Ledger"]:::core
+    P1["Phase 1 Runtime<br/>Compiler + Retriever + Gates + Ledger"]:::core
 
     subgraph TrustLayer["Trust Layer"]
         direction LR
-        TA["Trust Accumulator\nPer-agent score\ninitial: 0.5\nallow: +0.01 / deny: -0.05"]:::trust
-        TL["Trust Ledger\nOutcome history\nper agent"]:::trust
-        RL["Rate Limiter\ntrusted: 2x / standard: 1x\nprobation: 0.5x / untrusted: 0.1x"]:::trust
+        TA["Trust Accumulator<br/>Per-agent score<br/>initial: 0.5<br/>allow: +0.01 / deny: -0.05"]:::trust
+        TL["Trust Ledger<br/>Outcome history<br/>per agent"]:::trust
+        RL["Rate Limiter<br/>trusted: 2x / standard: 1x<br/>probation: 0.5x / untrusted: 0.1x"]:::trust
         TA --> TL
         TA --> RL
     end
 
     subgraph AdversarialLayer["Adversarial Layer"]
         direction LR
-        TD["Threat Detector\nPrompt injection\nPrivilege escalation\n6 threat categories"]:::adversarial
-        CD["Collusion Detector\nAgent interaction rings\nFrequency + timing analysis"]:::adversarial
-        MQ["Memory Quorum\n2/3 vote threshold\nfor critical writes"]:::adversarial
+        TD["Threat Detector<br/>Prompt injection<br/>Privilege escalation<br/>6 threat categories"]:::adversarial
+        CD["Collusion Detector<br/>Agent interaction rings<br/>Frequency + timing analysis"]:::adversarial
+        MQ["Memory Quorum<br/>2/3 vote threshold<br/>for critical writes"]:::adversarial
     end
 
     subgraph ProofLayer["Proof Layer"]
-        PC["Proof Chain\nHMAC-SHA256 signed\nappend-only log\nExport / import / verify"]:::proof
+        PC["Proof Chain<br/>HMAC-SHA256 signed<br/>append-only log<br/>Export / import / verify"]:::proof
     end
 
     subgraph QualityLayer["Quality Layer"]
         direction LR
-        CR["Conformance Runner\nReplay determinism\nverification"]:::quality
-        EP["Evolution Pipeline\nPropose → simulate → compare\n→ stage → promote / rollback"]:::quality
+        CR["Conformance Runner<br/>Replay determinism<br/>verification"]:::quality
+        EVP["Evolution Pipeline<br/>Propose → simulate → compare<br/>→ stage → promote / rollback"]:::quality
     end
 
-    State[".claude-flow/guidance/advanced/\nTrust snapshots, proof chain,\nthreat history, evolution state"]:::data
+    subgraph MemoryGateLayer["Memory Gate Layer"]
+        direction LR
+        MGAuth["Authority Check<br/>Role + namespace validation"]:::trust
+        MGRate["Rate Limiter<br/>Per-agent writes/min"]:::trust
+        MGPattern["Pattern Check<br/>always/never, enable/disable<br/>require/forbid oppositions"]:::quality
+        MGSemantic["Semantic Check<br/>Cosine similarity >= 0.85<br/>Contradiction detection"]:::adversarial
+        MGAuth --> MGRate
+        MGRate --> MGPattern
+        MGPattern --> MGSemantic
+    end
+
+    P1 --> MemoryGateLayer
+    MemoryGateLayer --> State
+
+    State[".claude-flow/guidance/advanced/<br/>Trust snapshots, proof chain,<br/>threat history, evolution state"]:::data
 
     P1 --> TrustLayer
     P1 --> AdversarialLayer
@@ -505,25 +524,25 @@ flowchart TB
     classDef verify fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
     classDef error fill:#FFCDD2,stroke:#C62828,stroke-width:2px,color:#B71C1C
 
-    Start["cf-guidance-impl init\n--target /path/to/repo"]:::start
+    Start["cf-guidance-impl init<br/>--target /path/to/repo"]:::start
 
     Start --> Phase1
 
     subgraph Phase1["Phase 1: Claude Flow Init"]
         CfInit{"--skip-cf-init?"}:::decision
-        CfInit -->|"No"| RunInit["npx @claude-flow/cli init\n--dual / --codex"]:::process
+        CfInit -->|"No"| RunInit["npx @claude-flow/cli init<br/>--dual / --codex"]:::process
         CfInit -->|"Yes"| Skip1["Skip"]:::process
     end
 
     Phase1 --> Phase2
 
     subgraph Phase2["Phase 2: Guidance Wiring"]
-        Shim["Write hook-handler shim\n.claude/helpers/hook-handler.cjs\n3-line CJS delegator"]:::file
-        Compat["Ensure .cjs/.js compat pairs\nrouter, session, memory, statusline"]:::file
-        MergeSettings["Merge .claude/settings.json\n4 event types + env vars"]:::file
-        CodexConfig["Append .agents/config.toml\n+ AGENTS.md documentation"]:::file
-        MergePkg["Merge package.json\n20+ guidance:* scripts + dependency"]:::file
-        LocalMd["Create CLAUDE.local.md stub\n+ add to .gitignore"]:::file
+        Shim["Write hook-handler shim<br/>.claude/helpers/hook-handler.cjs<br/>3-line CJS delegator"]:::file
+        Compat["Ensure .cjs/.js compat pairs<br/>router, session, memory, statusline"]:::file
+        MergeSettings["Merge .claude/settings.json<br/>4 event types + env vars"]:::file
+        CodexConfig["Append .agents/config.toml<br/>+ AGENTS.md documentation"]:::file
+        MergePkg["Merge package.json<br/>20+ guidance:* scripts + dependency"]:::file
+        LocalMd["Create CLAUDE.local.md stub<br/>+ add to .gitignore"]:::file
     end
 
     Phase2 --> Phase3
@@ -534,7 +553,7 @@ flowchart TB
         VerifyCheck -->|"Yes"| Done["Done"]:::start
         Verify --> FileCheck["Check required files exist"]:::verify
         Verify --> SyntaxCheck["node --check hook-handler.cjs"]:::verify
-        Verify --> SmokeTest["Smoke test: pipe JSON\nto hook-handler"]:::verify
+        Verify --> SmokeTest["Smoke test: pipe JSON<br/>to hook-handler"]:::verify
         Verify --> CompatCheck["Verify .cjs/.js pairs"]:::verify
         FileCheck --> Result{"All pass?"}:::decision
         SyntaxCheck --> Result
@@ -591,37 +610,37 @@ flowchart TB
     classDef apply fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
     classDef skip fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238
 
-    Trigger["Trigger\n--once / --daemon (30 min)\n/ session-end hook"]:::start
+    Trigger["Trigger<br/>--once / --daemon (30 min)<br/>/ session-end hook"]:::start
 
-    Trigger --> Lock{"Acquire file lock\n(PID-based)"}:::decision
+    Trigger --> Lock{"Acquire file lock<br/>(PID-based)"}:::decision
     Lock -->|"Locked"| SkipCycle["Skip cycle"]:::skip
     Lock -->|"Acquired"| Load
 
-    Load["Load CLAUDE.md\n+ CLAUDE.local.md"]:::process
-    Load --> Find["Find promotable local rules\nNew or changed vs root"]:::process
+    Load["Load CLAUDE.md<br/>+ CLAUDE.local.md"]:::process
+    Load --> Find["Find promotable local rules<br/>New or changed vs root"]:::process
 
-    Find --> HasRules{"Candidates\nfound?"}:::decision
+    Find --> HasRules{"Candidates<br/>found?"}:::decision
     HasRules -->|"None"| NoOp["No promotable rules"]:::skip
     HasRules -->|"Yes"| Build
 
-    Build["Build candidate CLAUDE.md\nInsert auto-promotion section"]:::process
-    Build --> Score["Score both versions\nanalyze() + benchmark()"]:::process
+    Build["Build candidate CLAUDE.md<br/>Insert auto-promotion section"]:::process
+    Build --> Score["Score both versions<br/>analyze() + benchmark()"]:::process
 
     Score --> ABCheck{"--ab flag?"}:::decision
-    ABCheck -->|"Yes"| AB["A/B Benchmark\nSynthetic executor\nbaseline vs guided"]:::process
+    ABCheck -->|"Yes"| AB["A/B Benchmark<br/>Synthetic executor<br/>baseline vs guided"]:::process
     ABCheck -->|"No"| Gate
 
-    AB --> ABGate{"deltaGain >=\n--min-ab-gain?"}:::decision
+    AB --> ABGate{"deltaGain >=<br/>--min-ab-gain?"}:::decision
     ABGate -->|"No"| Propose
     ABGate -->|"Yes"| Gate
 
-    Gate{"delta >= --min-delta\nAND --apply?"}:::decision
-    Gate -->|"No"| Propose["Save proposal\nproposals/CLAUDE.promoted.*.md"]:::data
+    Gate{"delta >= --min-delta<br/>AND --apply?"}:::decision
+    Gate -->|"No"| Propose["Save proposal<br/>proposals/CLAUDE.promoted.*.md"]:::data
     Gate -->|"Yes"| Apply["Apply promotion"]:::apply
 
     Apply --> Backup["Backup CLAUDE.md"]:::data
     Apply --> Write["Write updated CLAUDE.md"]:::data
-    Apply --> ADR["Generate ADR\ndocs/adr/ADR-NNN-*.md"]:::data
+    Apply --> ADR["Generate ADR<br/>docs/adr/ADR-NNN-*.md"]:::data
 
     Propose --> Report["Write report + state + log"]:::data
     Apply --> Report
@@ -721,6 +740,8 @@ flowchart TB
 | **Runtime** | `src/guidance/advanced-runtime.js` | Trust + Adversarial + Proof + Conformance + Evolution |
 | **Runtime** | `src/guidance/integration-runners.js` | 6 integration test suites |
 | **Runtime** | `src/guidance/content-aware-executor.js` | Synthetic executor for A/B benchmarking |
+| **Runtime** | `src/guidance/embedding-provider.js` | EmbeddingProvider interface + hash and AgentDB implementations |
+| **Runtime** | `src/guidance/memory-write-gate.js` | MemoryWriteGateHook: 4-check pre-write gate (authority, rate, pattern, semantic) |
 | **CLI** | `src/cli/guidance-integrations.js` | Event dispatch + integration suite orchestration |
 | **CLI** | `src/cli/event-handlers.js` | Per-event policy enforcement logic |
 | **CLI** | `src/cli/guidance-autopilot.js` | Rule optimisation and promotion |

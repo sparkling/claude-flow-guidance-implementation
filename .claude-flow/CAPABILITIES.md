@@ -1,5 +1,5 @@
 # Claude Flow V3 - Complete Capabilities Reference
-> Generated: 2026-02-18T14:44:11.548Z
+> Generated: 2026-02-24T00:00:00.000Z
 > Full documentation: https://github.com/ruvnet/claude-flow
 
 ## 📋 Table of Contents
@@ -34,8 +34,13 @@ Claude Flow V3 is a domain-driven design architecture for multi-agent AI coordin
 | Memory Backend | hybrid |
 | HNSW Indexing | Enabled |
 | Neural Learning | Enabled |
-| LearningBridge | Enabled (SONA + ReasoningBank) |
+| LearningBridge | Enabled (SONA confidence decay/boost) |
+| ReasoningBank | Enabled (pattern storage + MMR retrieval, via WM-011 patch) |
 | Knowledge Graph | Enabled (PageRank + Communities) |
+| Witness Chain | Enabled (SHAKE-256 tamper detection at session start, via WM-010 patch) |
+| Self-Learning | Enabled (search feedback loop, via WM-009 patch) |
+| Embedding Provider | Available (AgentDB-backed or hash fallback, via GD-001) |
+| Memory Write Gate | Available (contradiction detection + authority, via GD-002) |
 | Agent Scopes | Enabled (project/local/user) |
 
 ---

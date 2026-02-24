@@ -41,6 +41,8 @@ governance.
 | Rules drift over time | Evolution pipeline proposes, simulates, and stages rule changes with auto-rollback |
 | Prompt injection attacks | Threat detector analyses command and memory-write inputs for injection patterns |
 | Agent collusion in multi-agent setups | Collusion detector identifies suspicious ring-topology interaction patterns |
+| Poor shard retrieval quality | `IEmbeddingProvider` with AgentDB-backed semantic search replaces hash-only matching |
+| Contradictory memory writes | `MemoryWriteGateHook` checks authority, rate limits, and semantic contradictions before storing |
 
 ---
 
@@ -96,6 +98,14 @@ which additional subsystems to include during installation.
 | `autopilot` | One-shot and daemon-mode CLAUDE.md rule optimization with A/B benchmarking |
 | `analysis` | Policy analysis scoring and project scaffolding |
 | `codex` | OpenAI Codex lifecycle bridge for equivalent guidance enforcement |
+
+In addition, two always-available modules are exported independently of
+the component selection system:
+
+| Module | Export Path | What It Provides |
+|---|---|---|
+| Embedding Provider | `./embeddings` | `IEmbeddingProvider` interface with hash and AgentDB-backed implementations (see 6.13) |
+| Memory Write Gate | `./memory-gate` | Pre-write contradiction detection with authority, rate limiting, and semantic checks (see 6.14) |
 
 ### Presets
 
@@ -491,6 +501,113 @@ call any LLM. Instead, it counts enforcement terms in the CLAUDE.md to
 determine guidance strength and produces prompt-sensitive output
 snippets that simulate guided vs. unguided agent behaviour.
 
+### 6.13 Embedding Provider (`src/guidance/embedding-provider.js`)
+
+Defines the `IEmbeddingProvider` interface and two implementations.
+Used by the shard retriever for semantic rule selection and by the
+memory write gate for contradiction detection.
+
+**Interface contract:**
+
+| Method | Signature | Description |
+|---|---|---|
+| `initialize()` | `() => Promise<void>` | One-time async initialization |
+| `embed(text)` | `(string) => Promise<Float32Array>` | Convert text to a unit vector |
+| `batchEmbed(texts)` | `(string[]) => Promise<Float32Array[]>` | Batch text-to-vector |
+| `dimension()` | `() => number` | Returns the embedding dimension |
+| `destroy()` | `() => void` | Release resources |
+
+**Implementations:**
+
+| Class | Deps | Use Case |
+|---|---|---|
+| `HashEmbeddingProvider` | None | Deterministic hash-to-vector (384D). Fast, reproducible. Best for tests and environments without native deps. |
+| `AgentDBEmbeddingProvider` | `agentdb` (optional) | Wraps AgentDB's `EmbeddingService` for real semantic embeddings. Falls back to `HashEmbeddingProvider` if AgentDB is unavailable. |
+
+**Factory function:**
+
+```javascript
+import { createEmbeddingProvider } from '@sparkleideas/claude-flow-guidance/embeddings';
+
+// Hash provider (default, zero deps)
+const hash = createEmbeddingProvider({ provider: 'hash' });
+
+// AgentDB provider (falls back to hash if agentdb not installed)
+const agentdb = createEmbeddingProvider({
+  provider: 'agentdb',
+  dimension: 384,
+  model: 'Xenova/all-MiniLM-L6-v2',
+});
+
+await agentdb.initialize();
+const vec = await agentdb.embed('always use TypeScript');
+// vec is Float32Array(384), unit-normalized
+```
+
+### 6.14 Memory Write Gate (`src/guidance/memory-write-gate.js`)
+
+Wraps `@claude-flow/guidance`'s `MemoryWriteGate` with a simpler
+`checkWrite()` interface and adds semantic contradiction detection via
+the embedding provider (6.13).
+
+**What it checks before allowing a memory write:**
+
+| Check | Source | Example |
+|---|---|---|
+| Authority | Upstream `MemoryWriteGate` | Agent `worker-3` cannot write to `governance` namespace |
+| Rate limit | Upstream `MemoryWriteGate` | Agent exceeded 60 writes/minute |
+| Pattern contradictions | Upstream `MemoryWriteGate` | "always use tabs" vs existing "always use spaces" |
+| Semantic contradictions | Embedding cosine similarity | Two entries with >0.85 similarity but opposing content |
+
+**Usage:**
+
+```javascript
+import { createMemoryWriteGateHook } from '@sparkleideas/claude-flow-guidance/memory-gate';
+
+const gate = createMemoryWriteGateHook({
+  embeddingProvider: 'hash',     // or 'agentdb'
+  similarityThreshold: 0.85,     // cosine threshold for semantic check
+});
+await gate.initialize();
+
+// Register agent authorities
+gate.registerAuthority({
+  agentId: 'coder-1',
+  role: 'worker',
+  namespaces: ['patterns', 'code'],
+  maxWritesPerMinute: 60,
+  canDelete: false,
+  canOverwrite: false,
+  trustLevel: 0.8,
+});
+
+// Add existing entries for contradiction checking
+gate.addEntry({ key: 'style', namespace: 'patterns', value: 'always use spaces' });
+
+// Check a new write
+const result = await gate.checkWrite({
+  key: 'style-tabs',
+  namespace: 'patterns',
+  value: 'always use tabs',
+  agentId: 'coder-1',
+});
+
+if (!result.allowed) {
+  console.log(result.reason);
+  console.log(result.contradictions); // [{ existingKey: 'style', description: '...', similarity: 0.92 }]
+}
+```
+
+**Return value from `checkWrite()`:**
+
+| Field | Type | Description |
+|---|---|---|
+| `allowed` | `boolean` | Whether the write should proceed |
+| `reason` | `string?` | Human-readable explanation if blocked |
+| `contradictions` | `Array?` | Pattern + semantic contradictions found |
+| `authorityCheck` | `{ passed, requiredRole, actualRole }?` | Authority evaluation |
+| `rateCheck` | `{ passed, writesInWindow, limit }?` | Rate limit evaluation |
+
 ---
 
 ## 7. How the Hook Integration Works
@@ -735,6 +852,19 @@ import { createGuidanceAdvancedRuntime } from 'claude-flow-guidance-implementati
 
 // Synthetic executor for benchmarks
 import { createSyntheticContentAwareExecutor } from 'claude-flow-guidance-implementation/executor';
+
+// Embedding providers (hash-based or AgentDB-backed)
+import {
+  HashEmbeddingProvider,
+  AgentDBEmbeddingProvider,
+  createEmbeddingProvider,
+} from 'claude-flow-guidance-implementation/embeddings';
+
+// Memory write gate with contradiction detection
+import {
+  MemoryWriteGateHook,
+  createMemoryWriteGateHook,
+} from 'claude-flow-guidance-implementation/memory-gate';
 ```
 
 ### Example: Evaluating a Command Programmatically
@@ -769,6 +899,47 @@ const report = await runtime.runAllIntegrations();
 console.log(JSON.stringify(report, null, 2));
 ```
 
+### Example: Semantic Embedding with Fallback
+
+```javascript
+import { createEmbeddingProvider } from 'claude-flow-guidance-implementation/embeddings';
+
+// Uses AgentDB if installed, otherwise hash-based
+const provider = createEmbeddingProvider({ provider: 'agentdb' });
+await provider.initialize();
+
+const vecA = await provider.embed('use strict TypeScript');
+const vecB = await provider.embed('enable strict TypeScript mode');
+
+// Cosine similarity — semantically similar texts produce similar vectors
+const dot = vecA.reduce((sum, v, i) => sum + v * vecB[i], 0);
+console.log(`Similarity: ${dot.toFixed(3)}`); // ~0.85+ for related content
+```
+
+### Example: Pre-Write Contradiction Check
+
+```javascript
+import { createMemoryWriteGateHook } from 'claude-flow-guidance-implementation/memory-gate';
+
+const gate = createMemoryWriteGateHook();
+await gate.initialize();
+
+// Seed with existing entries
+gate.addEntry({ key: 'indent', namespace: 'style', value: 'use 2-space indentation' });
+
+// Check a potentially contradictory write
+const result = await gate.checkWrite({
+  key: 'indent-tabs',
+  namespace: 'style',
+  value: 'use tab indentation',
+  agentId: 'coder-1',
+});
+
+if (result.contradictions?.length) {
+  console.log('Contradicts:', result.contradictions.map(c => c.existingKey));
+}
+```
+
 ---
 
 ## 12. File Layout
@@ -793,6 +964,38 @@ my-project/
 +-- CLAUDE.local.md                  <- Local experiments (gitignored)
 +-- AGENTS.md                        <- Codex agent documentation (if Codex mode)
 +-- package.json                     <- Guidance scripts + dependencies merged
+```
+
+### Package Source Layout
+
+```
+claude-flow-guidance-implementation/
++-- bin/
+|   +-- guidance.mjs                 <- CLI entry point (cf-guidance-impl)
++-- src/
+|   +-- installer.mjs                <- initRepo, installIntoRepo, verifyRepo
+|   +-- default-settings.mjs         <- Hook/env/script/dep defaults
+|   +-- hook-handler.cjs             <- Central hook dispatcher (CJS for fast cold-start)
+|   +-- cli/
+|   |   +-- event-handlers.js        <- Full event processing pipeline
+|   |   +-- guidance-codex-bridge.js  <- Codex lifecycle adapter
+|   |   +-- guidance-autopilot.js     <- Rule optimization daemon
+|   |   +-- analyze-guidance.js       <- CLAUDE.md scoring (6 dimensions)
+|   |   +-- guidance-ab-benchmark.js  <- A/B benchmark runner
+|   |   +-- scaffold-guidance.js      <- Generate CLAUDE.md from package.json
+|   +-- guidance/
+|       +-- phase1-runtime.js         <- Compile -> retrieve -> gates -> ledger
+|       +-- advanced-runtime.js       <- Phase 1 + trust + adversarial + proof + evolution
+|       +-- content-aware-executor.js <- Synthetic executor for A/B benchmarks
+|       +-- embedding-provider.js     <- IEmbeddingProvider + Hash + AgentDB implementations
+|       +-- memory-write-gate.js      <- MemoryWriteGateHook with contradiction detection
++-- tests/
+|   +-- embedding-provider.test.mjs   <- 29 unit tests for embedding providers
+|   +-- memory-write-gate.test.mjs    <- 25 unit tests for memory write gate
+|   +-- e2e-memory-agentdb-v3.test.mjs <- E2e tests for embeddings + write gate integration
+|   +-- ...
++-- docs/
+    +-- guide/                        <- User guides (quick-start, trust, gates, evolution, etc.)
 ```
 
 ---

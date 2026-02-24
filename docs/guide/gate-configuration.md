@@ -8,8 +8,9 @@ This page describes the enforcement gates provided by the
 
 Enforcement gates are programmatic checkpoints that evaluate agent actions
 before they execute. Each gate inspects a specific dimension of the action
-(destructiveness, tool identity, change size, or secret exposure) and returns a
-decision: **allow**, **warn**, **require-confirmation**, or **block**.
+(destructiveness, tool identity, change size, secret exposure, or memory write
+integrity) and returns a decision: **allow**, **warn**,
+**require-confirmation**, or **block**.
 
 Gates are created by `createGates(gateConfig)` from
 `@claude-flow/guidance/gates`. The `GuidancePhase1Runtime` constructor
@@ -70,7 +71,7 @@ Any field you omit uses the default value described in
 | `secretPatterns` | `RegExp[]` | See [defaults](#default-secret-patterns) | Regular expressions matched against file content and command text. |
 | `destructivePatterns` | `RegExp[]` | See [defaults](#default-destructive-patterns) | Regular expressions matched against shell commands. |
 
-## The four enforcement gates
+## The five enforcement gates
 
 ### Gate 1: Destructive operations
 
@@ -277,6 +278,75 @@ Remediation:
   Detected patterns: sk-a************************************b3xY
 ```
 
+### Gate 5: Memory write gate (GD-002)
+
+The memory write gate protects memory integrity by checking every write before it reaches the storage backend. It runs four checks in sequence; the write is blocked on the first failure.
+
+#### Check Pipeline
+
+| Order | Check | What It Does | Blocks When |
+|---|---|---|---|
+| 1 | **Authority** | Validates agent role and namespace permissions | Agent lacks write permission for target namespace |
+| 2 | **Rate limit** | Counts writes in the current time window | Agent exceeds `maxWritesPerMinute` for their authority tier |
+| 3 | **Pattern** | Keyword-based opposition detection | New value contains opposing directives to existing entries |
+| 4 | **Semantic** | Embedding cosine similarity + opposition matching | Similarity >= 0.85 AND texts contain opposing keywords |
+
+#### Opposition Patterns
+
+The pattern and semantic checks use 7 built-in opposition pairs:
+
+| Pattern A | Pattern B |
+|---|---|
+| `always` | `never` |
+| `must` | `never` / `do not` / `don't` |
+| `require` | `forbid` / `prohibit` |
+| `enable` | `disable` |
+| `true` | `false` |
+| `use tabs` | `use spaces` |
+
+#### Configuration
+
+```javascript
+import { createMemoryWriteGateHook } from 'claude-flow-guidance-implementation/memory-write-gate';
+
+const gate = createMemoryWriteGateHook({
+  embeddingProvider: 'agentdb',       // 'hash' for tests
+  similarityThreshold: 0.85,          // lower = more sensitive
+  enableContradictionTracking: true,
+  authorities: [
+    {
+      agentId: 'lead-agent',
+      role: 'admin',
+      namespaces: ['*'],
+      maxWritesPerMinute: 120,
+      canDelete: true,
+      canOverwrite: true,
+      trustLevel: 0.9,
+    },
+  ],
+});
+await gate.initialize();
+```
+
+#### Example: Blocked Write
+
+```javascript
+// Existing entry
+gate.addEntry({ key: 'style', namespace: 'patterns', value: 'always use spaces for indentation' });
+
+// New write -- semantically contradictory
+const result = await gate.checkWrite({
+  key: 'style-override',
+  namespace: 'patterns',
+  value: 'always use tabs for indentation',
+  agentId: 'coder-1',
+});
+
+// result.allowed === false
+// result.contradictions[0].description ===
+//   'Semantic contradiction (similarity: 0.942): new value opposes existing entry'
+```
+
 ## Continue gate
 
 The `ContinueGate` is a separate gate created via
@@ -327,7 +397,7 @@ In addition to enforcement gates, the `pre-command` event handler runs commands
 through an adversarial threat detector
 (`runtime.threatDetector.analyzeInput()` from
 `@claude-flow/guidance/adversarial`). This layer operates independently of the
-four gates.
+five gates.
 
 Threats are scored on a 0--1 severity scale. Any threat with
 **severity >= 0.85** blocks the command regardless of the gate evaluation

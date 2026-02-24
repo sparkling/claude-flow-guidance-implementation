@@ -15,6 +15,11 @@ The third (governance runtime) is genuinely distinct.
 reranking layer on top of AgentDB v3, eliminating the parallel JSON store. Keep System 3
 (governance) separate.
 
+**Progress:** GD-001 (EmbeddingProvider) and GD-002 (MemoryWriteGateHook) are now
+implemented, providing the first concrete bridge between the three systems. GD-001
+establishes a shared vector space across Systems 2 and 3, while GD-002 enforces
+memory integrity using trust scores, embeddings, and pattern analysis.
+
 ---
 
 ## The Three Systems
@@ -55,23 +60,23 @@ flowchart TB
         direction TB
         I1["PageRank Engine"]:::sys1
         I2["Trigram Jaccard Matching"]:::sys1
-        I3["Confidence Feedback\n+0.05 / -0.02"]:::sys1
+        I3["Confidence Feedback<br/>+0.05 / -0.02"]:::sys1
         I1 --> I2 --> I3
     end
 
     subgraph S2["System 2: AgentDB v3 / HybridBackend"]
         direction TB
         A1["HNSW Vector Search"]:::sys2
-        A2["SelfLearningRvfBackend\nContrastive + LoRA + EWC++"]:::sys2
+        A2["SelfLearningRvfBackend<br/>Contrastive + LoRA + EWC++"]:::sys2
         A3["recordFeedback API"]:::sys2
         A1 --> A2 --> A3
     end
 
     subgraph S3["System 3: Governance Runtime"]
         direction TB
-        G1["TrustSystem\nPer-Agent Scoring"]:::sys3
-        G2["ProofChain\nSHAKE-256 Audit"]:::sys3
-        G3["Enforcement Gates\n4 Gate Pipeline"]:::sys3
+        G1["TrustSystem<br/>Per-Agent Scoring"]:::sys3
+        G2["ProofChain<br/>SHAKE-256 Audit"]:::sys3
+        G3["Enforcement Gates<br/>4 Gate Pipeline"]:::sys3
         G1 --> G2 --> G3
     end
 
@@ -153,11 +158,11 @@ flowchart LR
     classDef event fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
 
     SS["SessionStart"]:::event
-    INIT["init()\nBuild graph\nCompute PageRank"]:::process
-    CTX["getContext(prompt)\nTrigram match\nTop-5 results"]:::process
-    REC["recordEdit(file)\nAppend to JSONL"]:::process
-    FB["feedback(success)\n+0.05 or -0.02"]:::process
-    CON["consolidate()\nProcess insights\nDecay confidence\nRecompute PageRank"]:::process
+    INIT["init()<br/>Build graph<br/>Compute PageRank"]:::process
+    CTX["getContext(prompt)<br/>Trigram match<br/>Top-5 results"]:::process
+    REC["recordEdit(file)<br/>Append to JSONL"]:::process
+    FB["feedback(success)<br/>+0.05 or -0.02"]:::process
+    CON["consolidate()<br/>Process insights<br/>Decay confidence<br/>Recompute PageRank"]:::process
     SE["SessionEnd"]:::event
     STORE["auto-memory-store.json"]:::data
     GRAPH["graph-state.json"]:::data
@@ -226,13 +231,13 @@ flowchart LR
     classDef data fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
     classDef learn fill:#E1BEE7,stroke:#6A1B9A,stroke-width:2px,color:#4A148C
 
-    Q["Agent Query\n(MCP memory_search)"]:::process
-    HNSW["HNSW Vector Search\n61us latency"]:::process
-    RES["Results\n(ranked by cosine sim)"]:::data
-    FB["recordFeedback()\nquality: 0.0-1.0"]:::process
-    CT["Contrastive Training\nPositive/negative pairs"]:::learn
-    LORA["Micro-LoRA Adaptation\n128x compression"]:::learn
-    EWC["EWC++ Consolidation\n95%+ knowledge preserved"]:::learn
+    Q["Agent Query<br/>(MCP memory_search)"]:::process
+    HNSW["HNSW Vector Search<br/>61us latency"]:::process
+    RES["Results<br/>(ranked by cosine sim)"]:::data
+    FB["recordFeedback()<br/>quality: 0.0-1.0"]:::process
+    CT["Contrastive Training<br/>Positive/negative pairs"]:::learn
+    LORA["Micro-LoRA Adaptation<br/>128x compression"]:::learn
+    EWC["EWC++ Consolidation<br/>95%+ knowledge preserved"]:::learn
     RVF["agentdb-memory.rvf"]:::data
 
     Q --> HNSW
@@ -302,8 +307,8 @@ flowchart TB
     classDef gate fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
     classDef audit fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
 
-    P1["Phase 1: Compile\nCLAUDE.md -> Constitution + Shards"]:::phase
-    P2["Phase 2: Retrieve\nIntent-based shard filtering"]:::phase
+    P1["Phase 1: Compile<br/>CLAUDE.md -> Constitution + Shards"]:::phase
+    P2["Phase 2: Retrieve<br/>Intent-based shard filtering"]:::phase
     P3["Phase 3: Enforce"]:::phase
     P4["Phase 4: Trust & Reality"]:::phase
     P5["Phase 5: Adversarial Defense"]:::phase
@@ -370,22 +375,22 @@ flowchart LR
     classDef unique fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
 
     subgraph LEFT["System 1: intelligence.cjs"]
-        L1["Trigram Jaccard\n(character n-grams)"]:::unique
-        L2["MEMORY.md Bootstrap\n(seed from markdown)"]:::unique
+        L1["Trigram Jaccard<br/>(character n-grams)"]:::unique
+        L2["MEMORY.md Bootstrap<br/>(seed from markdown)"]:::unique
     end
 
     subgraph CENTER["OVERLAP"]
-        C1["Knowledge Graph\nwith PageRank"]:::overlap
-        C2["Confidence Scoring\nwith Feedback"]:::overlap
-        C3["Entry Storage\n(key-value + metadata)"]:::overlap
-        C4["Context Injection\n(ranked results)"]:::overlap
+        C1["Knowledge Graph<br/>with PageRank"]:::overlap
+        C2["Confidence Scoring<br/>with Feedback"]:::overlap
+        C3["Entry Storage<br/>(key-value + metadata)"]:::overlap
+        C4["Context Injection<br/>(ranked results)"]:::overlap
     end
 
     subgraph RIGHT["System 2: AgentDB v3"]
-        R1["HNSW Vector Search\n(61us, cosine sim)"]:::unique
-        R2["Contrastive Learning\n(LoRA + EWC++)"]:::unique
-        R3["Witness Chain\n(SHAKE-256 audit)"]:::unique
-        R4["COW Branching\n(instant experiments)"]:::unique
+        R1["HNSW Vector Search<br/>(61us, cosine sim)"]:::unique
+        R2["Contrastive Learning<br/>(LoRA + EWC++)"]:::unique
+        R3["Witness Chain<br/>(SHAKE-256 audit)"]:::unique
+        R4["COW Branching<br/>(instant experiments)"]:::unique
     end
 
     L1 -.-> C4
@@ -408,6 +413,48 @@ flowchart LR
 | **Learning speed** | Instant (JSON write) | Background (batch contrastive training) |
 | **Search quality** | Low (no semantic understanding) | High (vector similarity + self-learning) |
 | **Dependencies** | Zero (pure Node.js) | AgentDB v3 (sql.js WASM, 4.4MB) |
+
+---
+
+## Bridging the Gap: GD-001 and GD-002
+
+While the three systems historically operated in complete isolation, the guidance
+implementation kit has delivered the first concrete components that bridge them:
+
+### GD-001: EmbeddingProvider
+
+EmbeddingProvider creates a **shared vector space** used by both the ShardRetriever
+(for task-to-shard matching) and the MemoryWriteGateHook (for semantic contradiction
+detection). Two implementations are provided:
+
+| Implementation | Backend | Use Case |
+|----------------|---------|----------|
+| `HashEmbeddingProvider` | Deterministic hash-based vectors | Zero dependencies, test-friendly, fast |
+| `AgentDBEmbeddingProvider` | AgentDB v3 HNSW index | Real semantic search, production quality |
+
+By providing a common embedding interface, GD-001 allows the governance layer (System 3)
+to perform semantic operations against the same vector space used by the memory layer
+(System 2). This is the first point of integration between previously isolated systems.
+
+### GD-002: MemoryWriteGateHook
+
+MemoryWriteGateHook protects memory integrity with a **4-check pipeline** that sits
+between write requests and the memory store:
+
+1. **Authority validation** -- Role + namespace checks ensure agents can only write to
+   namespaces they own or have explicit access to.
+2. **Rate limiting** -- Per-agent writes/min caps prevent flooding. Limits vary by
+   trust tier (trusted agents get higher limits).
+3. **Pattern contradiction** -- Keyword opposition detection catches obvious conflicts
+   (e.g., writing "always use tabs" when "never use tabs" exists). Detects opposition
+   pairs: always/never, enable/disable, require/forbid.
+4. **Semantic contradiction** -- Uses EmbeddingProvider to compute cosine similarity
+   (threshold >= 0.85) combined with opposition pair matching to detect entries that
+   semantically contradict existing memory.
+
+This gate bridges all three systems: it consumes **trust scores from System 3** to
+set rate limits, queries **embeddings via System 2** (through GD-001) for semantic
+checks, and protects the **knowledge store used by System 1** from contradictory writes.
 
 ---
 
@@ -471,9 +518,9 @@ flowchart TB
         GOV["Trust + Proof + Gates"]:::sys3
     end
 
-    D1["JSON files\n.claude-flow/data/"]:::data
-    D2[".rvf + .db\n.swarm/"]:::data
-    D3["JSON files\n.claude-flow/guidance/"]:::data
+    D1["JSON files<br/>.claude-flow/data/"]:::data
+    D2[".rvf + .db<br/>.swarm/"]:::data
+    D3["JSON files<br/>.claude-flow/guidance/"]:::data
 
     AGENT -->|"explicit calls"| MCP
     AGENT -->|"triggers hooks"| HOOKS
@@ -486,7 +533,7 @@ flowchart TB
     SYS2 --> D2
     SYS3 --> D3
 
-    X1["DUPLICATE\nKNOWLEDGE"]:::warn
+    X1["DUPLICATE<br/>KNOWLEDGE"]:::warn
     D1 -..- X1
     D2 -..- X1
 ```
@@ -502,7 +549,9 @@ flowchart TB
 3. **Duplicate graph:** System 1 builds PageRank on JSON. The CLI's MemoryGraph
    (config.json `memory.memoryGraph.*`) does the same computation in-process.
 4. **No trust gating:** System 3's trust scores don't influence System 1's routing
-   or System 2's search ranking.
+   or System 2's search ranking. *(Partially addressed: GD-002 MemoryWriteGateHook
+   now uses trust tiers for write rate limiting, and GD-001 EmbeddingProvider enables
+   semantic checks across system boundaries.)*
 
 ---
 
@@ -545,8 +594,8 @@ flowchart TB
     AGENT["Claude Code Agent"]:::agent
 
     subgraph HOOKS["Guidance Hook Layer"]
-        HH["hook-handler.cjs\n(dispatcher)"]:::hook
-        AMH["auto-memory-hook.mjs\n(MEMORY.md bridge only)"]:::bridge
+        HH["hook-handler.cjs<br/>(dispatcher)"]:::hook
+        AMH["auto-memory-hook.mjs<br/>(MEMORY.md bridge only)"]:::bridge
     end
 
     subgraph MCP["CLI MCP Layer"]
@@ -554,12 +603,12 @@ flowchart TB
     end
 
     subgraph RERANK["intelligence.cjs (reranking layer)"]
-        PR["PageRank Reranker\nBoosts AgentDB results\nby structural importance"]:::rerank
-        FB["Feedback Router\nRoutes +/- signals\nto recordFeedback()"]:::rerank
+        PR["PageRank Reranker<br/>Boosts AgentDB results<br/>by structural importance"]:::rerank
+        FB["Feedback Router<br/>Routes +/- signals<br/>to recordFeedback()"]:::rerank
     end
 
     subgraph SINGLE["AgentDB v3 (single store)"]
-        ADB["HNSW Vector Search\n+ SelfLearningRvfBackend\n+ Witness Chain"]:::store
+        ADB["HNSW Vector Search<br/>+ SelfLearningRvfBackend<br/>+ Witness Chain"]:::store
     end
 
     subgraph GOV["Governance (separate)"]
@@ -568,8 +617,8 @@ flowchart TB
         GATES["Enforcement Gates"]:::gov
     end
 
-    RVF[".swarm/agentdb-memory.rvf\n(single source of truth)"]:::data
-    GOV_DATA[".claude-flow/guidance/advanced/\n(trust + proof)"]:::data
+    RVF[".swarm/agentdb-memory.rvf<br/>(single source of truth)"]:::data
+    GOV_DATA[".claude-flow/guidance/advanced/<br/>(trust + proof)"]:::data
 
     AGENT -->|"explicit calls"| MCP
     AGENT -->|"triggers hooks"| HOOKS
@@ -708,8 +757,10 @@ sequenceDiagram
 - Simplify `auto-memory-hook.mjs` to MEMORY.md <-> AgentDB bridge only
 - Keep `graph-state.json` as optional cache (rebuilt from AgentDB on init)
 
-### Phase 4: Trust-Gated Routing (Future)
-- Wire `TrustSystem.getScore(agentId)` into `router.cjs`
+### Phase 4: Trust-Gated Routing (In Progress)
+- ~~Wire trust scores into memory write path~~ -- **Done:** GD-002 MemoryWriteGateHook uses trust tiers for rate limiting
+- ~~Create shared embedding interface~~ -- **Done:** GD-001 EmbeddingProvider with hash and AgentDB implementations
+- Wire `TrustSystem.getScore(agentId)` into `router.cjs` for task routing
 - Gate task routing by agent trust tier
 - Feed routing outcomes back into TrustSystem
 
@@ -731,3 +782,20 @@ sequenceDiagram
 | `advanced-state.json` | 3 | `.claude-flow/guidance/advanced/` | **Keep** (governance, not memory) |
 | `proof-chain.json` | 3 | `.claude-flow/guidance/advanced/` | **Keep** (governance, not memory) |
 | `components.json` | 3 | `.claude-flow/guidance/` | **Keep** (feature flags) |
+
+---
+
+## Summary
+
+The three memory/learning systems in the claude-flow ecosystem were designed and
+deployed independently, resulting in duplicate storage, duplicate learning loops, and
+zero cross-system feedback. The target architecture consolidates Systems 1 and 2
+behind AgentDB v3 while keeping the governance layer (System 3) separate.
+
+**GD-001 (EmbeddingProvider) and GD-002 (MemoryWriteGateHook) represent the first
+concrete bridge between the previously isolated systems.** GD-001 establishes a shared
+vector space that both the policy retriever and the memory gate can use, while GD-002
+enforces write integrity using trust scores from the governance layer and semantic
+embeddings from the memory layer. Together, they demonstrate that the three systems can
+interoperate without requiring a full merge -- validating the incremental migration
+strategy outlined in the Migration Path above.

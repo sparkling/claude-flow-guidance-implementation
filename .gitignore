@@ -15,6 +15,7 @@ ruvector.db
 .claude-flow/data/
 .claude-flow/logs/
 .claude-flow/sessions/
+.claude-flow/neural/
 .claude-flow/hive-mind/
 .claude-flow/hooks/
 .claude-flow/learning/
@@ -24,6 +25,9 @@ ruvector.db
 .claude-flow/daemon.pid
 .claude-flow/daemon-state.json
 .claude-flow/.trend-cache.json
+.claude-flow/*.log
+.claude-flow/*.tmp
+.claude-flow/*.tmp.*
 
 # Guidance runtime artifacts
 .claude-flow/guidance/hook-task-cache.json
@@ -32,7 +36,7 @@ ruvector.db
 .claude-flow/guidance/index.json
 .claude-flow/guidance/.lock
 
-# Metrics (runtime-generated)
+# Metrics and security (runtime-generated)
 .claude-flow/metrics/
 .claude-flow/security/
 

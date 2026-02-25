@@ -3,10 +3,30 @@ data/
 logs/
 sessions/
 neural/
-*.log
-*.tmp
+hooks/
+learning/
+workflows/
+agents/
+hive-mind/
+
+# Runtime state
+agents.json
 daemon.pid
 daemon-state.json
 .trend-cache.json
-metrics/codebase-map.json
-metrics/consolidation.json
+*.log
+*.tmp
+*.tmp.*
+
+# Guidance runtime
+guidance/hook-task-cache.json
+guidance/events.ndjson
+guidance/events.tmp.*.ndjson
+guidance/index.json
+guidance/.lock
+
+# Metrics (all runtime-generated)
+metrics/
+
+# Security (runtime-generated)
+security/

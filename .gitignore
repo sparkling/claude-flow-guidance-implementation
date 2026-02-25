@@ -1,13 +1,40 @@
 node_modules/
 .DS_Store
 npm-debug.log*
+
+# Database files
 vectors.db
 ruvector.db
+*.sqlite
+*.sqlite-journal
+
+# Swarm runtime
 .swarm/
+
+# Claude-flow runtime state
 .claude-flow/data/
 .claude-flow/logs/
 .claude-flow/sessions/
+.claude-flow/hive-mind/
+.claude-flow/hooks/
+.claude-flow/learning/
+.claude-flow/workflows/
+.claude-flow/agents/
+.claude-flow/agents.json
+.claude-flow/daemon.pid
+.claude-flow/daemon-state.json
+.claude-flow/.trend-cache.json
+
+# Guidance runtime artifacts
 .claude-flow/guidance/hook-task-cache.json
+.claude-flow/guidance/events.ndjson
+.claude-flow/guidance/events.tmp.*.ndjson
+.claude-flow/guidance/index.json
+.claude-flow/guidance/.lock
+
+# Metrics (runtime-generated)
+.claude-flow/metrics/
+.claude-flow/security/
 
 # Codex local configuration
 .codex/
@@ -19,3 +46,9 @@ ruvector.db
 
 # Claude Code local config
 CLAUDE.local.md
+
+# OS files
+Thumbs.db
+*.swp
+*.swo
+*~

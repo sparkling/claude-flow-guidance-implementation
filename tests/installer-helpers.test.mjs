@@ -10,15 +10,15 @@ function readJson(filePath) {
 }
 
 /**
- * Copy the real hook-handler.cjs into a target's .claude/helpers/ so that
+ * Copy the real enforcement.cjs into a target's .claude/helpers/ so that
  * `node --check` and smoke tests can succeed (the thin shim requires the
  * npm package, which isn't available in temp dirs).
  */
-function writeRealHandler(targetDir) {
-  const realHandler = readFileSync(resolve(PROJECT_ROOT, 'src/hook-handler.cjs'), 'utf-8');
+function writeRealEnforcement(targetDir) {
+  const realEnforcement = readFileSync(resolve(PROJECT_ROOT, 'src/enforcement.cjs'), 'utf-8');
   const helpersDir = resolve(targetDir, '.claude/helpers');
   mkdirSync(helpersDir, { recursive: true });
-  writeFileSync(resolve(helpersDir, 'hook-handler.cjs'), realHandler);
+  writeFileSync(resolve(helpersDir, 'guidance-enforcement.cjs'), realEnforcement);
 }
 
 describe('installIntoRepo', () => {
@@ -32,14 +32,14 @@ describe('installIntoRepo', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('creates .claude/helpers/hook-handler.cjs shim in target', () => {
+  it('creates .claude/helpers/guidance-enforcement.cjs shim in target', () => {
     installIntoRepo({ targetRepo: tmpDir });
 
-    const shimPath = resolve(tmpDir, '.claude/helpers/hook-handler.cjs');
+    const shimPath = resolve(tmpDir, '.claude/helpers/guidance-enforcement.cjs');
     expect(existsSync(shimPath)).toBe(true);
 
     const content = readFileSync(shimPath, 'utf-8');
-    expect(content).toContain('@sparkleideas/claude-flow-guidance/hook-handler');
+    expect(content).toContain('@sparkleideas/claude-flow-guidance/enforcement');
   });
 
   it('creates package.json with guidance scripts when none exists', () => {
@@ -68,7 +68,7 @@ describe('installIntoRepo', () => {
     installIntoRepo({ targetRepo: tmpDir });
 
     const pkg = readJson(pkgPath);
-    // Existing script must NOT be overwritten (force=false by default)
+    // Existing script must NOT be overwritten
     expect(pkg.scripts['guidance:analyze']).toBe('my-custom-analyze');
     // Pre-existing script must be preserved
     expect(pkg.scripts.start).toBe('node index.js');
@@ -122,7 +122,7 @@ describe('installIntoRepo', () => {
               hooks: [
                 {
                   type: 'command',
-                  command: 'node .claude/helpers/hook-handler.cjs pre-bash',
+                  command: 'node .claude/helpers/guidance-enforcement.cjs pre-command',
                   timeout: 5000,
                 },
               ],
@@ -134,7 +134,7 @@ describe('installIntoRepo', () => {
               hooks: [
                 {
                   type: 'command',
-                  command: 'node .claude/helpers/hook-handler.cjs session-restore',
+                  command: 'node .claude/helpers/guidance-enforcement.cjs session-restore',
                   timeout: 15000,
                   continueOnError: true,
                 },
@@ -149,21 +149,21 @@ describe('installIntoRepo', () => {
 
     const settings = readJson(settingsPath);
 
-    // PreToolUse Bash matcher should have exactly one hook-handler hook, not two
+    // PreToolUse Bash matcher should have exactly one enforcement hook, not two
     const bashBlock = settings.hooks.PreToolUse.find((b) => b.matcher === 'Bash');
     expect(bashBlock).toBeDefined();
-    const handlerHooks = bashBlock.hooks.filter((h) =>
-      h.command.includes('hook-handler.cjs pre-bash')
+    const enforcementHooks = bashBlock.hooks.filter((h) =>
+      h.command.includes('guidance-enforcement.cjs pre-command')
     );
-    expect(handlerHooks).toHaveLength(1);
+    expect(enforcementHooks).toHaveLength(1);
     // The surviving hook should use $CLAUDE_PROJECT_DIR
-    expect(handlerHooks[0].command).toContain('$CLAUDE_PROJECT_DIR');
+    expect(enforcementHooks[0].command).toContain('$CLAUDE_PROJECT_DIR');
 
-    // SessionStart should also have exactly one hook-handler hook
+    // SessionStart should also have exactly one enforcement hook
     const sessionBlock = settings.hooks.SessionStart.find((b) => b.matcher === '');
     expect(sessionBlock).toBeDefined();
     const sessionHooks = sessionBlock.hooks.filter((h) =>
-      h.command.includes('hook-handler.cjs session-restore')
+      h.command.includes('guidance-enforcement.cjs session-restore')
     );
     expect(sessionHooks).toHaveLength(1);
     expect(sessionHooks[0].command).toContain('$CLAUDE_PROJECT_DIR');
@@ -247,8 +247,8 @@ describe('verifyRepo', () => {
     // First install to create all the expected files
     installIntoRepo({ targetRepo: tmpDir, targetMode: 'claude' });
 
-    // Replace the thin shim with the real handler so node --check succeeds
-    writeRealHandler(tmpDir);
+    // Replace the thin shim with the real enforcement so node --check succeeds
+    writeRealEnforcement(tmpDir);
 
     const result = verifyRepo({ targetRepo: tmpDir, targetMode: 'claude' });
 
@@ -257,8 +257,8 @@ describe('verifyRepo', () => {
     expect(result.targetMode).toBe('claude');
   });
 
-  it('returns passed: false when hook-handler.cjs missing', () => {
-    // Create package.json and settings.json but NOT the hook-handler
+  it('returns passed: false when guidance-enforcement.cjs missing', () => {
+    // Create package.json and settings.json but NOT the enforcement file
     mkdirSync(resolve(tmpDir, '.claude'), { recursive: true });
     writeFileSync(
       resolve(tmpDir, 'package.json'),
@@ -276,33 +276,33 @@ describe('verifyRepo', () => {
 
     expect(result.passed).toBe(false);
 
-    // The hook-handler file check should report missing
-    const handlerCheck = result.files.find(
-      (f) => f.path === '.claude/helpers/hook-handler.cjs'
+    // The enforcement file check should report missing
+    const enforcementCheck = result.files.find(
+      (f) => f.path === '.claude/helpers/guidance-enforcement.cjs'
     );
-    expect(handlerCheck).toBeDefined();
-    expect(handlerCheck.exists).toBe(false);
+    expect(enforcementCheck).toBeDefined();
+    expect(enforcementCheck.exists).toBe(false);
   });
 
   it('includes syntaxChecks in result', () => {
     installIntoRepo({ targetRepo: tmpDir, targetMode: 'claude' });
-    writeRealHandler(tmpDir);
+    writeRealEnforcement(tmpDir);
 
     const result = verifyRepo({ targetRepo: tmpDir, targetMode: 'claude' });
 
     expect(result.syntaxChecks).toBeDefined();
     expect(Array.isArray(result.syntaxChecks)).toBe(true);
-    // The hook-handler syntax check should pass
-    const handlerSyntax = result.syntaxChecks.find(
-      (s) => s.path === '.claude/helpers/hook-handler.cjs'
+    // The enforcement syntax check should pass
+    const enforcementSyntax = result.syntaxChecks.find(
+      (s) => s.path === '.claude/helpers/guidance-enforcement.cjs'
     );
-    expect(handlerSyntax).toBeDefined();
-    expect(handlerSyntax.ok).toBe(true);
+    expect(enforcementSyntax).toBeDefined();
+    expect(enforcementSyntax.ok).toBe(true);
   });
 
   it('reports smoke test results', () => {
     installIntoRepo({ targetRepo: tmpDir, targetMode: 'claude' });
-    writeRealHandler(tmpDir);
+    writeRealEnforcement(tmpDir);
 
     const result = verifyRepo({ targetRepo: tmpDir, targetMode: 'claude' });
 

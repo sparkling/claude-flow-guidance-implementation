@@ -1,41 +1,14 @@
 #!/usr/bin/env node
 /**
- * Claude Flow Hook Handler (Cross-Platform)
- * Dispatches hook events to the appropriate helper modules.
+ * Guidance Enforcement Handler
+ * Runs ALONGSIDE the upstream hook-handler.cjs -- never replaces it.
+ * Contains only guidance-specific enforcement gates, telemetry, and autopilot.
  */
 
 const path = require('path');
 const fs = require('fs');
 const { createHash } = require('crypto');
 const { spawn, spawnSync } = require('child_process');
-
-const helpersDir = process.env.__GUIDANCE_HELPERS_DIR || __dirname;
-
-function safeRequire(modulePath) {
-  try {
-    if (fs.existsSync(modulePath)) {
-      const origLog = console.log;
-      const origError = console.error;
-      console.log = () => {};
-      console.error = () => {};
-      try {
-        const mod = require(modulePath);
-        return mod;
-      } finally {
-        console.log = origLog;
-        console.error = origError;
-      }
-    }
-  } catch (e) {
-    // silently fail
-  }
-  return null;
-}
-
-let _router, _session, _intelligence;
-function getRouter() { return (_router ??= safeRequire(path.join(helpersDir, 'router.cjs'))); }
-function getSession() { return (_session ??= safeRequire(path.join(helpersDir, 'session.cjs'))); }
-function getIntelligence() { return (_intelligence ??= safeRequire(path.join(helpersDir, 'intelligence.cjs'))); }
 
 const [,, command, ...args] = process.argv;
 
@@ -49,28 +22,6 @@ try {
 } catch (e) { /* stdin may be empty or non-JSON */ }
 
 const prompt = process.env.PROMPT || (stdinData.tool_input && stdinData.tool_input.command) || args.join(' ') || '';
-
-function launchGuidanceAutopilot(source) {
-  if (process.env.GUIDANCE_AUTOPILOT_ENABLED === '0') return;
-  const projectDir = getProjectDir();
-  const scriptPath = resolveGuidanceScriptPath('guidance-autopilot.js');
-  if (!fs.existsSync(scriptPath)) return;
-
-  try {
-    const autopilotArgs = [
-      scriptPath, '--once', '--apply',
-      '--source', source || 'hook',
-      '--min-delta', process.env.GUIDANCE_AUTOPILOT_MIN_DELTA || '0.5',
-    ];
-    if (process.env.GUIDANCE_AUTOPILOT_AB === '1') {
-      autopilotArgs.push('--ab', '--min-ab-gain', process.env.GUIDANCE_AUTOPILOT_MIN_AB_GAIN || '0.05');
-    }
-    const child = spawn(process.execPath, autopilotArgs, {
-      cwd: projectDir, env: process.env, detached: true, stdio: 'ignore',
-    });
-    child.unref();
-  } catch (e) { /* non-fatal */ }
-}
 
 function guidanceWiringEnabled() { return process.env.GUIDANCE_EVENT_WIRING_ENABLED !== '0'; }
 function getProjectDir() { return process.env.CLAUDE_PROJECT_DIR || process.cwd(); }
@@ -229,6 +180,28 @@ function launchGuidanceEventAsync(eventName, payload) {
   } catch (error) { /* non-fatal */ }
 }
 
+function launchGuidanceAutopilot(source) {
+  if (process.env.GUIDANCE_AUTOPILOT_ENABLED === '0') return;
+  const projectDir = getProjectDir();
+  const scriptPath = resolveGuidanceScriptPath('guidance-autopilot.js');
+  if (!fs.existsSync(scriptPath)) return;
+
+  try {
+    const autopilotArgs = [
+      scriptPath, '--once', '--apply',
+      '--source', source || 'hook',
+      '--min-delta', process.env.GUIDANCE_AUTOPILOT_MIN_DELTA || '0.5',
+    ];
+    if (process.env.GUIDANCE_AUTOPILOT_AB === '1') {
+      autopilotArgs.push('--ab', '--min-ab-gain', process.env.GUIDANCE_AUTOPILOT_MIN_AB_GAIN || '0.05');
+    }
+    const child = spawn(process.execPath, autopilotArgs, {
+      cwd: projectDir, env: process.env, detached: true, stdio: 'ignore',
+    });
+    child.unref();
+  } catch (e) { /* non-fatal */ }
+}
+
 function guidanceBlockMessage(result, fallback) {
   if (!result) return fallback;
   const messages = Array.isArray(result.messages) ? result.messages : [];
@@ -241,156 +214,78 @@ function guidanceBlockMessage(result, fallback) {
   return fragments.length > 0 ? fragments.join(' | ') : fallback;
 }
 
-// --- Extracted handler functions ---
-
-function handleRoute() {
-  const intel = getIntelligence();
-  if (intel && intel.getContext) {
-    try { const ctx = intel.getContext(prompt); if (ctx) console.log(ctx); } catch (e) { /* non-fatal */ }
-  }
-  const rtr = getRouter();
-  if (rtr && rtr.routeTask) {
-    const result = rtr.routeTask(prompt);
-    const output = [
-      '[INFO] Routing task: ' + (prompt.substring(0, 80) || '(no prompt)'), '',
-      '+------------------- Primary Recommendation -------------------+',
-      '| Agent: ' + result.agent.padEnd(53) + '|',
-      '| Confidence: ' + (result.confidence * 100).toFixed(1) + '%' + ' '.repeat(44) + '|',
-      '| Reason: ' + result.reason.substring(0, 53).padEnd(53) + '|',
-      '+--------------------------------------------------------------+',
-    ];
-    console.log(output.join('\n'));
-  } else {
-    console.log('[INFO] Router not available, using default routing');
-  }
-}
-
-function handlePreBash() {
-  const commandText = safeString(getToolInput().command || prompt, '').trim();
-  const guidance = runGuidanceEventSync('pre-command', buildGuidancePayload({ taskId: getTaskId('pre-command'), command: commandText }));
-  if (guidance && guidance.blocked) {
-    console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Command blocked by guidance'));
-    process.exit(1);
-  }
-  const dangerousPatterns = [
-    /rm\s+-rf\s+\//,
-    /format\s+c:/i,
-    /del\s+\/s\s+\/q\s+c:\\/i,
-    /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,
-  ];
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(commandText)) {
-      console.error('[BLOCKED] Dangerous command pattern detected');
-      process.exit(1);
-    }
-  }
-  console.log('[OK] Command validated');
-}
-
-function handlePreEdit() {
-  const filePath = getFilePath();
-  if (!filePath) { console.log('[OK] Edit validation skipped (missing file path)'); return; }
-  const guidance = runGuidanceEventSync('pre-edit', buildGuidancePayload({
-    taskId: getTaskId('pre-edit'), filePath, content: getEditContent(),
-    diffLines: getDiffLines(), operation: safeString(getToolInput().operation, 'modify'),
-  }));
-  if (guidance && guidance.blocked) {
-    console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Edit blocked by guidance'));
-    process.exit(1);
-  }
-  console.log('[OK] Edit validated');
-}
-
-function handlePostEdit() {
-  const sess = getSession();
-  if (sess && sess.metric) { try { sess.metric('edits'); } catch (e) { /* no active session */ } }
-  const intel = getIntelligence();
-  if (intel && intel.recordEdit) {
-    try { intel.recordEdit((stdinData.tool_input && stdinData.tool_input.file_path) || args[0] || ''); } catch (e) { /* non-fatal */ }
-  }
-  launchGuidanceEventAsync('post-edit', buildGuidancePayload({ taskId: getTaskId('post-edit'), filePath: getFilePath() }));
-  console.log('[OK] Edit recorded');
-}
-
-function handleSessionRestore() {
-  const sess = getSession();
-  if (sess) {
-    const existing = sess.restore && sess.restore();
-    if (!existing) { sess.start && sess.start(); }
-  } else {
-    console.log('[OK] Session restored: session-' + Date.now());
-  }
-  const intel = getIntelligence();
-  if (intel && intel.init) {
-    try {
-      const result = intel.init();
-      if (result && result.nodes > 0) console.log('[INTELLIGENCE] Loaded ' + result.nodes + ' patterns, ' + result.edges + ' edges');
-    } catch (e) { /* non-fatal */ }
-  }
-}
-
-function handleSessionEnd() {
-  const intel = getIntelligence();
-  if (intel && intel.consolidate) {
-    try {
-      const result = intel.consolidate();
-      if (result && result.entries > 0) {
-        let msg = '[INTELLIGENCE] Consolidated: ' + result.entries + ' entries, ' + result.edges + ' edges';
-        if (result.newEntries > 0) msg += ', ' + result.newEntries + ' new';
-        console.log(msg + ', PageRank recomputed');
-      }
-    } catch (e) { /* non-fatal */ }
-  }
-  const sess = getSession();
-  if (sess && sess.end) { sess.end(); } else { console.log('[OK] Session ended'); }
-  launchGuidanceEventAsync('session-end', buildGuidancePayload({ taskId: getTaskId('session-end') }));
-  launchGuidanceAutopilot('session-end');
-}
-
-function handlePreTask() {
-  const taskDescription = getTaskDescription();
-  const taskId = getTaskId('pre-task');
-  rememberTaskContext(taskId, taskDescription);
-  const guidance = runGuidanceEventSync('pre-task', buildGuidancePayload({ taskId, taskDescription }));
-  if (guidance && guidance.blocked) {
-    console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Task blocked by guidance'));
-    process.exit(1);
-  }
-  const sess = getSession();
-  if (sess && sess.metric) { try { sess.metric('tasks'); } catch (e) { /* no active session */ } }
-  const rtr = getRouter();
-  const routePrompt = taskDescription || prompt;
-  if (rtr && rtr.routeTask && routePrompt) {
-    const result = rtr.routeTask(routePrompt);
-    console.log('[INFO] Task routed to: ' + result.agent + ' (confidence: ' + result.confidence + ')');
-  } else {
-    console.log('[OK] Task started');
-  }
-}
-
-function handlePostTask() {
-  const remembered = getRememberedTaskContext();
-  const taskId = getExplicitTaskId() || (remembered && remembered.taskId) || getTaskId('post-task');
-  const taskDescription = getTaskDescription() || (remembered && remembered.taskDescription) || '';
-  const intel = getIntelligence();
-  if (intel && intel.feedback) { try { intel.feedback(true); } catch (e) { /* non-fatal */ } }
-  launchGuidanceEventAsync('post-task', buildGuidancePayload({
-    taskId, taskDescription, status: safeString(getToolInput().status, 'completed'), toolsUsed: [], filesTouched: [],
-  }));
-  console.log('[OK] Task completed');
-}
-
 // --- Dispatch table ---
 
 const handlers = {
-  'route': handleRoute,
-  'pre-bash': handlePreBash,
-  'pre-edit': handlePreEdit,
-  'post-edit': handlePostEdit,
-  'session-restore': handleSessionRestore,
-  'session-end': handleSessionEnd,
-  'pre-task': handlePreTask,
-  'post-task': handlePostTask,
+  'pre-command': () => {
+    const commandText = safeString(getToolInput().command || prompt, '').trim();
+    const guidance = runGuidanceEventSync('pre-command', buildGuidancePayload({ taskId: getTaskId('pre-command'), command: commandText }));
+    if (guidance && guidance.blocked) {
+      console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Command blocked by guidance'));
+      process.exit(1);
+    }
+    const dangerousPatterns = [
+      /rm\s+-rf\s+\//,
+      /format\s+c:/i,
+      /del\s+\/s\s+\/q\s+c:\\/i,
+      /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/,
+    ];
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(commandText)) {
+        console.error('[BLOCKED] Dangerous command pattern detected');
+        process.exit(1);
+      }
+    }
+    console.log('[OK] Command validated');
+  },
+
+  'pre-edit': () => {
+    const filePath = getFilePath();
+    if (!filePath) { console.log('[OK] Edit validation skipped (missing file path)'); return; }
+    const guidance = runGuidanceEventSync('pre-edit', buildGuidancePayload({
+      taskId: getTaskId('pre-edit'), filePath, content: getEditContent(),
+      diffLines: getDiffLines(), operation: safeString(getToolInput().operation, 'modify'),
+    }));
+    if (guidance && guidance.blocked) {
+      console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Edit blocked by guidance'));
+      process.exit(1);
+    }
+    console.log('[OK] Edit validated');
+  },
+
+  'pre-task': () => {
+    const taskDescription = getTaskDescription();
+    const taskId = getTaskId('pre-task');
+    rememberTaskContext(taskId, taskDescription);
+    const guidance = runGuidanceEventSync('pre-task', buildGuidancePayload({ taskId, taskDescription }));
+    if (guidance && guidance.blocked) {
+      console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Task blocked by guidance'));
+      process.exit(1);
+    }
+    console.log('[OK] Task started');
+  },
+
+  'post-edit': () => {
+    launchGuidanceEventAsync('post-edit', buildGuidancePayload({ taskId: getTaskId('post-edit'), filePath: getFilePath() }));
+    console.log('[OK] Edit recorded');
+  },
+
+  'post-task': () => {
+    const remembered = getRememberedTaskContext();
+    const taskId = getExplicitTaskId() || (remembered && remembered.taskId) || getTaskId('post-task');
+    const taskDescription = getTaskDescription() || (remembered && remembered.taskDescription) || '';
+    launchGuidanceEventAsync('post-task', buildGuidancePayload({
+      taskId, taskDescription, status: safeString(getToolInput().status, 'completed'), toolsUsed: [], filesTouched: [],
+    }));
+    console.log('[OK] Task completed');
+  },
+
+  'session-end': () => {
+    launchGuidanceEventAsync('session-end', buildGuidancePayload({ taskId: getTaskId('session-end') }));
+    launchGuidanceAutopilot('session-end');
+    console.log('[OK] Session ended');
+  },
+
   'compact-manual': () => {
     console.log('PreCompact Guidance:');
     console.log('IMPORTANT: Review CLAUDE.md in project root for:');
@@ -399,6 +294,7 @@ const handlers = {
     console.log('   - Critical concurrent execution rules (1 MESSAGE = ALL OPERATIONS)');
     console.log('Ready for compact operation');
   },
+
   'compact-auto': () => {
     console.log('Auto-Compact Guidance (Context Window Full):');
     console.log('CRITICAL: Before compacting, ensure you understand:');
@@ -408,12 +304,11 @@ const handlers = {
     console.log('Apply GOLDEN RULE: Always batch operations in single messages');
     console.log('Auto-compact proceeding with full agent context');
   },
-  'status': () => { console.log('[OK] Status check'); },
-  'stats': () => {
-    const intel = getIntelligence();
-    if (intel && intel.stats) { intel.stats(args.includes('--json')); }
-    else { console.log('[WARN] Intelligence module not available. Run session-restore first.'); }
-  },
+
+  'user-prompt': () => { console.log('[OK] User prompt received'); },
+  'post-tool-failure': () => { console.log('[OK] Tool failure noted'); },
+  'stop': () => { console.log('[OK] Stop acknowledged'); },
+  'session-restore': () => { console.log('[OK] Session restored'); },
 };
 
 async function main() {
@@ -424,7 +319,7 @@ async function main() {
     return;
   }
   if (command) { console.log('[OK] Hook: ' + command); return; }
-  console.log('Usage: hook-handler.cjs <route|pre-bash|pre-edit|post-edit|session-restore|session-end|pre-task|post-task|compact-manual|compact-auto|status|stats>');
+  console.log('Usage: guidance-enforcement.cjs <pre-command|pre-edit|pre-task|post-edit|post-task|session-end|compact-manual|compact-auto|user-prompt|post-tool-failure|stop|session-restore>');
 }
 
 main();

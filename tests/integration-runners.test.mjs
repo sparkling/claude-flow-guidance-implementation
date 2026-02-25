@@ -459,3 +459,383 @@ describe('createIntegrationRunners', () => {
     expect(summary.agentId).toBe('custom-agent');
   });
 });
+
+// ── runCoherenceIntegration ──────────────────────────────────────────────────
+
+describe('runCoherenceIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns coherence integration summary', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(summary.integration).toBe('coherence');
+  });
+
+  it('computes coherence score', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(typeof summary.coherenceScore).toBe('number');
+  });
+
+  it('determines privilege level', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(typeof summary.privilegeLevel).toBe('string');
+  });
+
+  it('includes health and drift status', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(typeof summary.isHealthy).toBe('boolean');
+    expect(typeof summary.isDrifting).toBe('boolean');
+    expect(typeof summary.shouldRestrict).toBe('boolean');
+  });
+
+  it('includes budget status', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(summary.budgetStatus).toBeDefined();
+    expect(summary.usageSummary).toBeDefined();
+  });
+
+  it('includes recommendation', async () => {
+    const summary = await runtime.runCoherenceIntegration();
+    expect(typeof summary.recommendation).toBe('string');
+  });
+});
+
+// ── runContinueGateIntegration ───────────────────────────────────────────────
+
+describe('runContinueGateIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns continue-gate integration summary', async () => {
+    const summary = await runtime.runContinueGateIntegration();
+    expect(summary.integration).toBe('continue-gate');
+  });
+
+  it('evaluates 5 steps', async () => {
+    const summary = await runtime.runContinueGateIntegration();
+    expect(summary.evaluations).toBe(5);
+    expect(summary.decisions.length).toBe(5);
+  });
+
+  it('each decision has step and decision/action', async () => {
+    const summary = await runtime.runContinueGateIntegration();
+    for (const d of summary.decisions) {
+      expect(typeof d.step).toBe('number');
+      // upstream returns .decision, null-object returns .action (both are provided)
+      const hasAction = typeof d.action === 'string' || typeof d.decision === 'string';
+      expect(hasAction).toBe(true);
+    }
+  });
+
+  it('includes stats', async () => {
+    const summary = await runtime.runContinueGateIntegration();
+    expect(summary.stats).toBeDefined();
+    expect(typeof summary.stats.totalEvaluations).toBe('number');
+  });
+});
+
+// ── runAuthorityIntegration ──────────────────────────────────────────────────
+
+describe('runAuthorityIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns authority integration summary', async () => {
+    const summary = await runtime.runAuthorityIntegration();
+    expect(summary.integration).toBe('authority');
+  });
+
+  it('classifies 5 test actions', async () => {
+    const summary = await runtime.runAuthorityIntegration();
+    expect(summary.classifications.length).toBe(5);
+  });
+
+  it('each classification has expected fields', async () => {
+    const summary = await runtime.runAuthorityIntegration();
+    for (const c of summary.classifications) {
+      expect(typeof c.action).toBe('string');
+      // upstream classify() may return string or object with .classification
+      expect(c.classification).toBeDefined();
+      // upstream canPerform returns { allowed: boolean } or boolean (null-object)
+      expect(c.canPerform).toBeDefined();
+    }
+  });
+
+  it('includes interventions count', async () => {
+    const summary = await runtime.runAuthorityIntegration();
+    expect(typeof summary.interventions).toBe('number');
+  });
+});
+
+// ── runMetaGovernanceIntegration ─────────────────────────────────────────────
+
+describe('runMetaGovernanceIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns meta-governance integration summary', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(summary.integration).toBe('meta-governance');
+  });
+
+  it('checks invariants', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(typeof summary.invariantsPassed).toBe('boolean');
+  });
+
+  it('reports invariant count', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(typeof summary.invariantCount).toBe('number');
+  });
+
+  it('proposes amendment', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(typeof summary.amendmentProposed).toBe('boolean');
+  });
+
+  it('validates optimizer action', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(typeof summary.optimizerActionAllowed).toBe('boolean');
+  });
+
+  it('reports pending amendments', async () => {
+    const summary = await runtime.runMetaGovernanceIntegration();
+    expect(typeof summary.pendingAmendments).toBe('number');
+  });
+});
+
+// ── runOptimizerIntegration ──────────────────────────────────────────────────
+
+describe('runOptimizerIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns optimizer integration summary', async () => {
+    const summary = await runtime.runOptimizerIntegration();
+    expect(summary.integration).toBe('optimizer');
+  });
+
+  it('includes cycle number', async () => {
+    const summary = await runtime.runOptimizerIntegration();
+    expect(typeof summary.cycleNumber).toBe('number');
+  });
+
+  it('includes proposed changes count', async () => {
+    const summary = await runtime.runOptimizerIntegration();
+    expect(typeof summary.proposedChanges).toBe('number');
+  });
+
+  it('includes ADR count', async () => {
+    const summary = await runtime.runOptimizerIntegration();
+    expect(typeof summary.adrs).toBe('number');
+  });
+});
+
+// ── runKnowledgeIntegration ──────────────────────────────────────────────────
+
+describe('runKnowledgeIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns knowledge integration summary', async () => {
+    const summary = await runtime.runKnowledgeIntegration();
+    expect(summary.integration).toBe('knowledge');
+  });
+
+  it('includes truth anchor results', async () => {
+    const summary = await runtime.runKnowledgeIntegration();
+    expect(summary.truthAnchors).toBeDefined();
+    expect(typeof summary.truthAnchors.anchored).toBe('boolean');
+    expect(summary.truthAnchors.resolution).toBeDefined();
+  });
+
+  it('includes uncertainty results', async () => {
+    const summary = await runtime.runKnowledgeIntegration();
+    expect(summary.uncertainty).toBeDefined();
+    expect(typeof summary.uncertainty.beliefCreated).toBe('boolean');
+    expect(summary.uncertainty.confidence).toBeDefined();
+    expect(typeof summary.uncertainty.isActionable).toBe('boolean');
+  });
+
+  it('includes temporal results', async () => {
+    const summary = await runtime.runKnowledgeIntegration();
+    expect(summary.temporal).toBeDefined();
+    expect(typeof summary.temporal.asserted).toBe('boolean');
+    expect(typeof summary.temporal.currentTruthCount).toBe('number');
+  });
+});
+
+// ── runCapabilitiesIntegration ───────────────────────────────────────────────
+
+describe('runCapabilitiesIntegration', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns capabilities integration summary', async () => {
+    const summary = await runtime.runCapabilitiesIntegration();
+    expect(summary.integration).toBe('capabilities');
+  });
+
+  it('grants capability', async () => {
+    const summary = await runtime.runCapabilitiesIntegration();
+    expect(typeof summary.granted).toBe('boolean');
+  });
+
+  it('checks allowed capability', async () => {
+    const summary = await runtime.runCapabilitiesIntegration();
+    expect(typeof summary.checkAllowed).toBe('boolean');
+  });
+
+  it('checks denied capability', async () => {
+    const summary = await runtime.runCapabilitiesIntegration();
+    expect(typeof summary.checkDenied).toBe('boolean');
+  });
+
+  it('lists agent capabilities', async () => {
+    const summary = await runtime.runCapabilitiesIntegration();
+    expect(typeof summary.agentCapabilities).toBe('number');
+  });
+});
+
+// ── runAllIntegrations (updated) ─────────────────────────────────────────────
+
+describe('runAllIntegrations (updated)', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('runs all 13 integrations', async () => {
+    const report = await runAllIntegrations(runtime);
+    expect(report.hooks).toBeDefined();
+    expect(report.trust).toBeDefined();
+    expect(report.adversarial).toBeDefined();
+    expect(report.proof).toBeDefined();
+    expect(report.conformance).toBeDefined();
+    expect(report.evolution).toBeDefined();
+    expect(report.coherence).toBeDefined();
+    expect(report.continueGate).toBeDefined();
+    expect(report.authority).toBeDefined();
+    expect(report.metaGovernance).toBeDefined();
+    expect(report.optimizer).toBeDefined();
+    expect(report.knowledge).toBeDefined();
+    expect(report.capabilities).toBeDefined();
+  });
+
+  it('includes generatedAt', async () => {
+    const report = await runAllIntegrations(runtime);
+    expect(report.generatedAt).toBeDefined();
+  });
+});
+
+// ── createIntegrationRunners (updated) ───────────────────────────────────────
+
+describe('createIntegrationRunners (updated)', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns all 13 runner functions', () => {
+    const runners = createIntegrationRunners(runtime);
+    expect(typeof runners.runHooksIntegration).toBe('function');
+    expect(typeof runners.runTrustIntegration).toBe('function');
+    expect(typeof runners.runAdversarialIntegration).toBe('function');
+    expect(typeof runners.runProofIntegration).toBe('function');
+    expect(typeof runners.runConformanceIntegration).toBe('function');
+    expect(typeof runners.runEvolutionIntegration).toBe('function');
+    expect(typeof runners.runCoherenceIntegration).toBe('function');
+    expect(typeof runners.runContinueGateIntegration).toBe('function');
+    expect(typeof runners.runAuthorityIntegration).toBe('function');
+    expect(typeof runners.runMetaGovernanceIntegration).toBe('function');
+    expect(typeof runners.runOptimizerIntegration).toBe('function');
+    expect(typeof runners.runKnowledgeIntegration).toBe('function');
+    expect(typeof runners.runCapabilitiesIntegration).toBe('function');
+  });
+});

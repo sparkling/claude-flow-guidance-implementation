@@ -278,7 +278,7 @@ Remediation:
   Detected patterns: sk-a************************************b3xY
 ```
 
-### Gate 5: Memory write gate (GD-002)
+### Gate 5: Memory write gate
 
 The memory write gate protects memory integrity by checking every write before it reaches the storage backend. It runs four checks in sequence; the write is blocked on the first failure.
 

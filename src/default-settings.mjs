@@ -18,7 +18,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-edit',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs pre-edit',
             timeout: hookTimeout,
           },
         ],
@@ -28,7 +28,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs pre-command',
             timeout: hookTimeout,
           },
         ],
@@ -38,7 +38,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-task',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs pre-task',
             timeout: hookTimeout,
           },
         ],
@@ -50,7 +50,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-edit',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs post-edit',
             timeout: hookTimeout,
           },
         ],
@@ -60,7 +60,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-task',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs post-task',
             timeout: hookTimeout,
           },
         ],
@@ -72,7 +72,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs post-tool-failure',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs post-tool-failure',
             timeout: hookTimeout,
           },
         ],
@@ -84,7 +84,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs user-prompt',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs user-prompt',
             timeout: hookTimeout,
           },
         ],
@@ -96,7 +96,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-restore',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs session-restore',
             timeout: hookTimeout,
           },
         ],
@@ -108,7 +108,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs session-end',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs session-end',
             timeout: hookTimeout,
           },
         ],
@@ -120,7 +120,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs stop',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs stop',
             timeout: hookTimeout,
           },
         ],
@@ -132,7 +132,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-manual',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs compact-manual',
             timeout: hookTimeout,
           },
         ],
@@ -142,7 +142,7 @@ export function buildHookDefaults(hookTimeout = 5000) {
         hooks: [
           {
             type: 'command',
-            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs compact-auto',
+            command: 'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs compact-auto',
             timeout: hookTimeout,
           },
         ],

@@ -39,8 +39,8 @@ Claude Flow V3 is a domain-driven design architecture for multi-agent AI coordin
 | Knowledge Graph | Enabled (PageRank + Communities) |
 | Witness Chain | Enabled (SHAKE-256 tamper detection at session start, via WM-010 patch) |
 | Self-Learning | Enabled (search feedback loop, via WM-009 patch) |
-| Embedding Provider | Available (AgentDB-backed or hash fallback, via GD-001) |
-| Memory Write Gate | Available (contradiction detection + authority, via GD-002) |
+| Embedding Provider | Available (AgentDB-backed or hash fallback, via embedding-provider.js) |
+| Memory Write Gate | Available (contradiction detection + authority, via memory-write-gate.js) |
 | Agent Scopes | Enabled (project/local/user) |
 
 ---

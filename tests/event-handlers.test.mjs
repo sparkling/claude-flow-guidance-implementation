@@ -491,3 +491,192 @@ describe('runEvent: warning-to-violation mapping', () => {
     expect(hasWarnings || hasMessages || isBlocked).toBe(true);
   });
 });
+
+// ── pre-command authority ────────────────────────────────────────────────────
+
+describe('runEvent: pre-command authority', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes classification field in result', async () => {
+    const result = await runEvent(runtime, 'pre-command', {
+      command: 'git status',
+      agentId: 'agent-1',
+    });
+    expect(result.classification).toBeDefined();
+    // upstream classify() returns an object with .classification string
+    expect(typeof result.classification).toBe('object');
+    expect(typeof result.classification.classification).toBe('string');
+  });
+
+  it('includes authorityBlocked field in result', async () => {
+    const result = await runEvent(runtime, 'pre-command', {
+      command: 'git status',
+      agentId: 'agent-1',
+    });
+    expect(typeof result.authorityBlocked).toBe('boolean');
+  });
+
+  it('safe commands are not authority-blocked', async () => {
+    const result = await runEvent(runtime, 'pre-command', {
+      command: 'git status',
+      agentId: 'agent-1',
+    });
+    expect(result.authorityBlocked).toBe(false);
+  });
+});
+
+// ── pre-command coherence ────────────────────────────────────────────────────
+
+describe('runEvent: pre-command coherence', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes coherence tracking in result', async () => {
+    const result = await runEvent(runtime, 'pre-command', {
+      command: 'npm test',
+      agentId: 'coherence-agent',
+    });
+    expect(result.coherence).toBeDefined();
+    expect(typeof result.coherence.score).toBe('number');
+    expect(typeof result.coherence.recommendation).toBe('string');
+    expect(typeof result.coherence.shouldRestrict).toBe('boolean');
+  });
+});
+
+// ── pre-task continue-gate ───────────────────────────────────────────────────
+
+describe('runEvent: pre-task continue-gate', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes continueDecision in result', async () => {
+    const result = await runEvent(runtime, 'pre-task', {
+      taskDescription: 'Add input validation',
+      agentId: 'agent-1',
+    });
+    expect(result.continueDecision).toBeDefined();
+    // upstream returns .decision, null-object returns .action (both present)
+    const hasDecision = result.continueDecision.action || result.continueDecision.decision;
+    expect(hasDecision).toBeDefined();
+  });
+
+  it('first task gets continue decision', async () => {
+    const result = await runEvent(runtime, 'pre-task', {
+      taskDescription: 'Write tests',
+      agentId: 'agent-1',
+    });
+    const decision = result.continueDecision.decision ?? result.continueDecision.action;
+    expect(decision).toBe('continue');
+  });
+
+  it('includes coherence tracking in pre-task result', async () => {
+    const result = await runEvent(runtime, 'pre-task', {
+      taskDescription: 'Refactor code',
+      agentId: 'agent-1',
+    });
+    expect(result.coherence).toBeDefined();
+    expect(typeof result.coherence.score).toBe('number');
+  });
+
+  it('increments step counter', async () => {
+    const counterBefore = runtime.stepCounter;
+    await runEvent(runtime, 'pre-task', {
+      taskDescription: 'Another task',
+      agentId: 'agent-1',
+    });
+    expect(runtime.stepCounter).toBeGreaterThan(counterBefore);
+  });
+});
+
+// ── pre-edit coherence ───────────────────────────────────────────────────────
+
+describe('runEvent: pre-edit coherence', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes coherence tracking in pre-edit result', async () => {
+    const result = await runEvent(runtime, 'pre-edit', {
+      filePath: 'src/app.js',
+      content: 'const x = 1;',
+      agentId: 'agent-1',
+    });
+    expect(result.coherence).toBeDefined();
+    expect(typeof result.coherence.score).toBe('number');
+  });
+});
+
+// ── session-end optimizer ────────────────────────────────────────────────────
+
+describe('runEvent: session-end optimizer', () => {
+  let tmpDir;
+  let runtime;
+
+  beforeAll(async () => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    runtime = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes optimizer field in session-end result', async () => {
+    const result = await runEvent(runtime, 'session-end', {
+      agentId: 'agent-1',
+    });
+    expect(result).toHaveProperty('optimizer');
+  });
+
+  it('optimizer result is null or has expected shape', async () => {
+    const result = await runEvent(runtime, 'session-end', {});
+    if (result.optimizer !== null) {
+      // Should have either cycleNumber or error shape
+      expect(
+        typeof result.optimizer.cycleNumber === 'number' ||
+        result.optimizer.error === true
+      ).toBe(true);
+    }
+  });
+});

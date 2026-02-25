@@ -270,7 +270,7 @@ pattern in `threatSignals`.
 
 #### Memory Write Authority
 
-In multi-agent deployments, each agent's trust score affects its memory write permissions through the MemoryWriteGateHook (GD-002). Register authorities at deployment time to control which agents can write to which namespaces:
+In multi-agent deployments, each agent's trust score affects its memory write permissions through the MemoryWriteGateHook. Register authorities at deployment time to control which agents can write to which namespaces:
 
 | Trust Tier | Rate Limit | Namespace Access | Can Overwrite | Can Delete |
 |---|---|---|---|---|

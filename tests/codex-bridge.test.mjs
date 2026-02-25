@@ -53,11 +53,11 @@ describe('codex-bridge: supported events', () => {
 
 describe('codex-bridge: event mapping', () => {
   // These will fail with "Missing hook handler" since we don't have the
-  // hook-handler.cjs at .claude/helpers/, but the output JSON confirms
+  // guidance-enforcement.cjs at .claude/helpers/, but the output JSON confirms
   // the event was recognized and the handler was attempted.
 
   const events = [
-    { event: 'pre-command', mapped: 'pre-bash' },
+    { event: 'pre-command', mapped: 'pre-command' },
     { event: 'pre-edit', mapped: 'pre-edit' },
     { event: 'pre-task', mapped: 'pre-task' },
     { event: 'post-edit', mapped: 'post-edit' },
@@ -75,7 +75,7 @@ describe('codex-bridge: event mapping', () => {
       if (stdout.startsWith('{')) {
         const summary = JSON.parse(stdout);
         expect(summary.event).toBe(event);
-        // handler result may fail (missing hook-handler at expected path)
+        // handler result may fail (missing enforcement handler at expected path)
         // but the event was correctly recognized
         expect(summary.ids).toBeDefined();
         expect(summary.ids.taskId).toBeDefined();
@@ -213,7 +213,7 @@ describe('codex-bridge: baseIds defaults', () => {
 
 describe('codex-bridge: hookHandlerInput payload construction', () => {
   // We test indirectly by examining the summary output — the handler field
-  // shows what happened when the hook-handler received the constructed input.
+  // shows what happened when the enforcement handler received the constructed input.
 
   it('pre-edit includes content and diff-lines', () => {
     const result = runBridge([
@@ -258,19 +258,19 @@ describe('codex-bridge: hookHandlerInput payload construction', () => {
   });
 });
 
-// ── With real hook-handler installed ────────────────────────────────────────
+// ── With real enforcement handler installed ─────────────────────────────────
 
-describe('codex-bridge: with hook-handler installed', () => {
+describe('codex-bridge: with enforcement handler installed', () => {
   let tmpDir;
 
   beforeEach(() => {
     tmpDir = resolve(tmpdir(), `bridge-hh-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
 
-    // Install hook-handler.cjs at expected location
+    // Install guidance-enforcement.cjs at expected location
     const helpersDir = join(tmpDir, '.claude', 'helpers');
     mkdirSync(helpersDir, { recursive: true });
-    copyFileSync(resolve('src/hook-handler.cjs'), join(helpersDir, 'hook-handler.cjs'));
+    copyFileSync(resolve('src/enforcement.cjs'), join(helpersDir, 'guidance-enforcement.cjs'));
 
     // Minimal CLAUDE.md
     writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Test\n- NEVER use eval()');
@@ -280,7 +280,7 @@ describe('codex-bridge: with hook-handler installed', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('pre-command runs hook-handler successfully', () => {
+  it('pre-command runs enforcement handler successfully', () => {
     const result = runBridge(
       ['pre-command', '--command', 'git status'],
       { GUIDANCE_PROJECT_DIR: tmpDir },

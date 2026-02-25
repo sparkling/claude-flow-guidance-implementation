@@ -1,5 +1,5 @@
 /**
- * Embedding Provider Interface & Implementations (GD-001)
+ * Embedding Provider Interface & Implementations
  *
  * Defines IEmbeddingProvider — the contract for text-to-vector embeddings
  * used by the guidance runtime and memory subsystem.

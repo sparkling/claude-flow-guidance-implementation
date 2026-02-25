@@ -39,15 +39,29 @@
     "./executor": {
       "import": "./src/guidance/content-aware-executor.js"
     },
-    "./hook-handler": {
-      "import": "./src/hook-handler.cjs",
-      "require": "./src/hook-handler.cjs"
+    "./enforcement": {
+      "require": "./src/enforcement.cjs"
+    },
+    "./enforcement-layer": {
+      "import": "./src/guidance/enforcement-layer.js"
     },
     "./embeddings": {
       "import": "./src/guidance/embedding-provider.js"
     },
     "./memory-gate": {
       "import": "./src/guidance/memory-write-gate.js"
+    },
+    "./observation": {
+      "import": "./src/guidance/observation-layer.js"
+    },
+    "./validation": {
+      "import": "./src/guidance/validation-layer.js"
+    },
+    "./knowledge": {
+      "import": "./src/guidance/knowledge-layer.js"
+    },
+    "./infrastructure": {
+      "import": "./src/guidance/infrastructure-layer.js"
     }
   },
   "files": [
@@ -75,12 +89,13 @@
     "guidance:hooks": "cf-guidance run hooks",
     "guidance:trust": "cf-guidance run trust",
     "guidance:proof": "cf-guidance run proof",
-    "guidance:runtime": "cf-guidance runtime demo"
+    "guidance:runtime": "cf-guidance runtime demo",
+    "guidance:compliance": "node scripts/run-compliance.js",
+    "guidance:compliance:json": "node scripts/run-compliance.js --json"
   },
   "dependencies": {
     "@claude-flow/guidance": "^3.0.0-alpha.1",
-    "@claude-flow/hooks": "^3.0.0-alpha.7",
-    "@sparkleideas/claude-flow-guidance": "^3.0.0-alpha.1"
+    "@claude-flow/hooks": "^3.0.0-alpha.7"
   },
   "keywords": [
     "claude-flow",

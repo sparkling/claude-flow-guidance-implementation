@@ -1,5 +1,5 @@
 /**
- * MemoryWriteGateHook Tests (GD-002)
+ * MemoryWriteGateHook Tests
  *
  * Tests:
  *   - checkWrite allows non-contradictory writes

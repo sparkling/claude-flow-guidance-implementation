@@ -75,10 +75,10 @@ describe('GUIDANCE_HOOKS_DEFAULTS', () => {
         }
       });
 
-      it('all hook commands reference hook-handler.cjs', () => {
+      it('all hook commands reference guidance-enforcement.cjs', () => {
         for (const block of GUIDANCE_HOOKS_DEFAULTS[category]) {
           for (const hook of block.hooks) {
-            expect(hook.command).toContain('hook-handler.cjs');
+            expect(hook.command).toContain('guidance-enforcement.cjs');
           }
         }
       });

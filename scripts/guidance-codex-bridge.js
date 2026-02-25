@@ -20,7 +20,7 @@ const SUPPORTED_EVENTS = new Set([
 ]);
 
 const HOOK_HANDLER_MAP = {
-  'pre-command': 'pre-bash',
+  'pre-command': 'pre-command',
   'pre-edit': 'pre-edit',
   'pre-task': 'pre-task',
   'post-edit': 'post-edit',
@@ -159,7 +159,7 @@ function hookHandlerInput(eventName, options, payload, ids, fallbackText) {
 }
 
 function runHookHandler(mappedCommand, inputJson) {
-  const handlerPath = resolve(rootDir, '.claude/helpers/hook-handler.cjs');
+  const handlerPath = resolve(rootDir, '.claude/helpers/guidance-enforcement.cjs');
   if (!existsSync(handlerPath)) {
     return {
       ok: false,

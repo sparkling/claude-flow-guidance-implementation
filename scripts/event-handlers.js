@@ -30,6 +30,22 @@ function mapHookWarningsToViolations(result, baseRuleId) {
   }));
 }
 
+function trackCoherence(runtime, violations, recentEvents) {
+  try {
+    const metrics = {
+      violationRate: violations.length,
+      reworkLines: 0,
+    };
+    const raw = runtime.coherenceScheduler.computeCoherence(metrics, recentEvents);
+    const score = typeof raw === 'number' ? raw : (raw?.overall ?? 1.0);
+    const recommendation = runtime.coherenceScheduler.getRecommendation();
+    runtime.economicGovernor.recordToolCall('event-handler', 0);
+    return { score, recommendation, shouldRestrict: runtime.coherenceScheduler.shouldRestrict() };
+  } catch {
+    return { score: 1.0, recommendation: 'continue', shouldRestrict: false };
+  }
+}
+
 export async function runEvent(runtime, eventName, payload) {
   await runtime.initialize();
   const agentId = safeString(payload.agentId, 'claude-main');
@@ -62,7 +78,22 @@ export async function runEvent(runtime, eventName, payload) {
 
       const gateBlocked = !gateResult.success || Boolean(gateResult.aborted);
       const threatBlocked = severeThreats.length > 0;
-      const blocked = gateBlocked || threatBlocked;
+
+      // Authority / irreversibility classification
+      const classification = runtime.irreversibilityClassifier.classify(command);
+      // Upstream classify() returns an object { classification: string, ... } or a string
+      const classificationLevel = typeof classification === 'string'
+        ? classification
+        : classification?.classification ?? 'trivial';
+      let authorityBlocked = false;
+      if (classificationLevel === 'irreversible' || classificationLevel === 'costly-reversible') {
+        const canProceed = runtime.authorityGate.canPerform('agent', command);
+        if (!canProceed) {
+          authorityBlocked = true;
+        }
+      }
+
+      const blocked = gateBlocked || threatBlocked || authorityBlocked;
       const outcome = blocked ? 'deny' : outcomeFromHookResult(gateResult);
 
       runtime.recordTrust(agentId, outcome, 'hook pre-command');
@@ -76,6 +107,15 @@ export async function runEvent(runtime, eventName, payload) {
           autoCorrected: false,
         })),
       ];
+
+      if (authorityBlocked) {
+        violations.push({
+          ruleId: 'authority-blocked',
+          description: `${classificationLevel} action requires higher authority than agent level`,
+          severity: 'critical',
+          autoCorrected: true,
+        });
+      }
 
       if (blocked) {
         violations.push({
@@ -124,6 +164,9 @@ export async function runEvent(runtime, eventName, payload) {
         warnings: safeArray(gateResult.warnings),
         threatCount: inputThreats.length,
         severeThreatCount: severeThreats.length,
+        classification,
+        authorityBlocked,
+        coherence: trackCoherence(runtime, violations, []),
         trust: runtime.trustSystem.getSnapshot(agentId),
         proofEnvelope: {
           envelopeId: proofEnvelope.envelopeId,
@@ -204,6 +247,7 @@ export async function runEvent(runtime, eventName, payload) {
         blocked,
         messages: safeArray(gateResult.messages),
         warnings: safeArray(gateResult.warnings),
+        coherence: trackCoherence(runtime, violations, []),
         trust: runtime.trustSystem.getSnapshot(agentId),
         proofEnvelope: {
           envelopeId: proofEnvelope.envelopeId,
@@ -226,6 +270,36 @@ export async function runEvent(runtime, eventName, payload) {
           blocked: false,
           skipped: true,
           reason: 'empty-task-description',
+        };
+      }
+
+      // Continue-gate evaluation (infinite loop / budget slope prevention)
+      let continueDecision = { action: 'continue', reason: 'default' };
+      try {
+        let rawCoherence = 1.0;
+        try {
+          const c = runtime.coherenceScheduler.computeCoherence({ violationRate: 0, reworkLines: 0 }, []);
+          rawCoherence = typeof c === 'number' ? c : (c?.overall ?? 1.0);
+        } catch {}
+        continueDecision = runtime.continueGate.evaluate({
+          stepNumber: runtime.stepCounter++,
+          coherenceScore: rawCoherence,
+          reworkRatio: 0,
+          uncertaintyScore: 0,
+          lastCheckpointStep: 0,
+          budgetRemaining: { tokens: 10000, toolCalls: 100, timeMs: 60000 },
+        });
+      } catch {
+        runtime.stepCounter++;
+      }
+
+      if ((continueDecision.decision ?? continueDecision.action) === 'stop') {
+        return {
+          event: 'pre-task',
+          success: false,
+          blocked: true,
+          reason: `continue-gate-stop: ${continueDecision.reason}`,
+          continueDecision,
         };
       }
 
@@ -283,6 +357,8 @@ export async function runEvent(runtime, eventName, payload) {
         warnings: safeArray(result.warnings),
         policyTextLength: policyText.length,
         hooksExecuted: result.hooksExecuted,
+        continueDecision: continueDecision ?? null,
+        coherence: trackCoherence(runtime, violations, []),
         trust: runtime.trustSystem.getSnapshot(agentId),
         proofEnvelope: {
           envelopeId: proofEnvelope.envelopeId,
@@ -415,6 +491,39 @@ export async function runEvent(runtime, eventName, payload) {
     case 'session-end': {
       const conformance = await runtime.runConformanceIntegration();
       const evolution = await runtime.runEvolutionIntegration();
+
+      // Optimizer cycle — run if enough events accumulated
+      let optimizerResult = null;
+      try {
+        if (runtime.phase1.ledger.eventCount >= (runtime.options.minEventsForOptimization ?? 50)) {
+          const cycle = runtime.optimizer.runCycle(
+            runtime.phase1.ledger,
+            runtime.phase1.getBundle()
+          );
+          // Meta-governance check before applying promotions
+          if (cycle.promotions && cycle.promotions.length > 0) {
+            const valid = runtime.metaGovernor.validateOptimizerAction({
+              type: 'promote',
+              changes: cycle.promotions,
+            });
+            optimizerResult = {
+              cycleNumber: cycle.cycleNumber,
+              proposedChanges: cycle.proposedChanges?.length ?? 0,
+              promotions: valid.allowed ? cycle.promotions.length : 0,
+              blockedByMetaGovernance: !valid.allowed,
+            };
+          } else {
+            optimizerResult = {
+              cycleNumber: cycle.cycleNumber,
+              skipped: cycle.skipped,
+              reason: cycle.reason,
+            };
+          }
+        }
+      } catch {
+        optimizerResult = { error: true, reason: 'optimizer-cycle-failed' };
+      }
+
       const summary = {
         event: 'session-end',
         success: true,
@@ -428,6 +537,7 @@ export async function runEvent(runtime, eventName, payload) {
           proposalStatus: evolution.proposalStatus,
           approved: Boolean(evolution.comparison?.approved),
         },
+        optimizer: optimizerResult,
       };
       await runtime.persistState({ lastHookEvent: summary });
       return summary;

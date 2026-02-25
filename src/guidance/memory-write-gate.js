@@ -1,9 +1,9 @@
 /**
- * MemoryWriteGate Pre-Write Hook (GD-002)
+ * MemoryWriteGate Pre-Write Hook
  *
  * Wraps @claude-flow/guidance's MemoryWriteGate with a simpler checkWrite()
  * interface that CLI memory can call before storing entries. Adds semantic
- * similarity via the embedding provider (GD-001) for richer contradiction
+ * similarity via the EmbeddingProvider for richer contradiction
  * detection beyond the upstream pattern matching.
  *
  * Usage:

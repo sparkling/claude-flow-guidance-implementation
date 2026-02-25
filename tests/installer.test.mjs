@@ -99,6 +99,7 @@ describe('installIntoRepo CLI flag overrides', () => {
     });
     expect(result.dryRun).toBe(true);
     expect(Array.isArray(result.wouldWrite)).toBe(true);
+    expect(result.wouldWrite).toContain('.claude/helpers/guidance-enforcement.cjs');
     expect(result.wouldWrite).toContain('.claude/settings.json');
     expect(result.envVars).toBeDefined();
     expect(result.hooks).toBeDefined();

@@ -23,7 +23,7 @@ const GUIDANCE_CODEX_CONFIG_BLOCK = [
   '[guidance_codex]',
   'enabled = true',
   'script = "scripts/guidance-codex-bridge.js"',
-  'hook_handler = ".claude/helpers/hook-handler.cjs"',
+  'hook_handler = ".claude/helpers/guidance-enforcement.cjs"',
   'run_claude_flow_cli_hooks = true',
   '',
   '[guidance_codex.commands]',
@@ -45,7 +45,7 @@ const GUIDANCE_CODEX_AGENTS_BLOCK = [
   'This project uses an explicit bridge script:',
   '',
   '- `scripts/guidance-codex-bridge.js` -> dispatches lifecycle events to:',
-  '  - `.claude/helpers/hook-handler.cjs` (enforcement path)',
+  '  - `.claude/helpers/guidance-enforcement.cjs` (enforcement path)',
   '  - optional `npx @claude-flow/cli@latest hooks ...` telemetry calls',
   '',
   'Primary commands:',
@@ -108,19 +108,19 @@ function sameMatcher(a, b) {
 }
 
 /**
- * Normalize a hook-handler command for deduplication.
+ * Normalize a guidance-enforcement command for deduplication.
  * Strips path prefix variations so that both relative and $CLAUDE_PROJECT_DIR
  * forms resolve to the same identity string.
  *
- *   'node .claude/helpers/hook-handler.cjs pre-bash'
- *   'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/hook-handler.cjs pre-bash'
+ *   'node .claude/helpers/guidance-enforcement.cjs pre-command'
+ *   'node "$CLAUDE_PROJECT_DIR"/.claude/helpers/guidance-enforcement.cjs pre-command'
  *
- * Both normalize to: 'node .claude/helpers/hook-handler.cjs pre-bash'
+ * Both normalize to: 'node .claude/helpers/guidance-enforcement.cjs pre-command'
  */
 function normalizeHookCommand(cmd) {
   return String(cmd || '').replace(
-    /node\s+(?:"[^"]*"\/)?(?:\.\/)?\.claude\/helpers\/hook-handler\.cjs/,
-    'node .claude/helpers/hook-handler.cjs'
+    /node\s+(?:"[^"]*"\/)?(?:\.\/)?\.claude\/helpers\/guidance-enforcement\.cjs/,
+    'node .claude/helpers/guidance-enforcement.cjs'
   );
 }
 
@@ -185,16 +185,13 @@ function appendBlockIfMissing(path, marker, block, fallback = '') {
   return true;
 }
 
-const HOOK_HANDLER_SHIM = `#!/usr/bin/env node
-// Thin shim — delegates to the full hook-handler in the npm package.
-// This file is kept local so Claude Code's hook config can reference it by path.
-process.env.__GUIDANCE_HELPERS_DIR = process.env.__GUIDANCE_HELPERS_DIR || __dirname;
-require('@sparkleideas/claude-flow-guidance/hook-handler');
+const GUIDANCE_ENFORCEMENT_SHIM = `#!/usr/bin/env node
+// Guidance enforcement -- runs ALONGSIDE the upstream hook-handler.cjs
+require('@sparkleideas/claude-flow-guidance/enforcement');
 `;
 
 export async function installIntoRepo({
   targetRepo,
-  force = false,
   installDeps = false,
   targetMode = 'both',
   components,
@@ -263,7 +260,7 @@ export async function installIntoRepo({
   // Dry-run: compute what would be written and return without touching disk.
   if (dryRun) {
     const wouldWrite = [
-      '.claude/helpers/hook-handler.cjs',
+      '.claude/helpers/guidance-enforcement.cjs',
       'package.json',
     ];
     if (usesClaudeMode(mode)) wouldWrite.push('.claude/settings.json');
@@ -284,12 +281,10 @@ export async function installIntoRepo({
     };
   }
 
-  // Write thin hook-handler shim (delegates to the npm package).
-  const shimPath = resolve(target, '.claude/helpers/hook-handler.cjs');
-  if (force || !existsSync(shimPath)) {
-    ensureDir(dirname(shimPath));
-    writeText(shimPath, HOOK_HANDLER_SHIM);
-  }
+  // Write guidance enforcement shim (delegates to the npm package).
+  const shimPath = resolve(target, '.claude/helpers/guidance-enforcement.cjs');
+  ensureDir(dirname(shimPath));
+  writeText(shimPath, GUIDANCE_ENFORCEMENT_SHIM);
 
   // Merge package.json scripts + dependencies.
   const packagePath = resolve(target, 'package.json');
@@ -306,7 +301,7 @@ export async function installIntoRepo({
   packageJson.scripts = packageJson.scripts || {};
   for (const [name, cmd] of Object.entries(GUIDANCE_PACKAGE_SCRIPTS)) {
     if (!allowedScripts.has(name)) continue;
-    if (force || !(name in packageJson.scripts)) {
+    if (!(name in packageJson.scripts)) {
       packageJson.scripts[name] = cmd;
     }
   }
@@ -396,7 +391,7 @@ export async function installIntoRepo({
     target,
     targetMode: mode,
     filesInstalled: [
-      '.claude/helpers/hook-handler.cjs (shim)',
+      '.claude/helpers/guidance-enforcement.cjs (shim)',
     ],
     packageUpdated: packagePath,
     settingsUpdated: settingsPath,
@@ -424,7 +419,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   const target = resolve(targetRepo);
   const mode = normalizeTargetMode(targetMode);
   const requiredFiles = [
-    '.claude/helpers/hook-handler.cjs',
+    '.claude/helpers/guidance-enforcement.cjs',
     'package.json',
   ];
 
@@ -451,7 +446,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
 
   const syntaxChecks = [];
   const checkFiles = [
-    '.claude/helpers/hook-handler.cjs',
+    '.claude/helpers/guidance-enforcement.cjs',
   ];
 
   for (const relPath of checkFiles) {
@@ -473,7 +468,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   if (usesClaudeMode(mode)) {
     smoke = spawnSync(
       'node',
-      ['.claude/helpers/hook-handler.cjs', 'pre-bash'],
+      ['.claude/helpers/guidance-enforcement.cjs', 'pre-command'],
       { cwd: target, encoding: 'utf-8', timeout: 30000, input: smokeInput }
     );
   }
@@ -482,7 +477,7 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
   if (usesCodexMode(mode)) {
     smokeCodex = run(
       'node',
-      ['-e', 'import("@sparkleideas/claude-flow-guidance/hook-handler")'],
+      ['-e', 'import("@sparkleideas/claude-flow-guidance/enforcement")'],
       target
     );
   }
@@ -514,11 +509,8 @@ export function verifyRepo({ targetRepo, targetMode = 'both' }) {
 
 export async function initRepo({
   targetRepo,
-  force = false,
   installDeps = false,
   targetMode = 'both',
-  dual = true,
-  skipCfInit = false,
   verify = true,
   components,
   preset,
@@ -542,38 +534,8 @@ export async function initRepo({
     throw new Error(`Target repo does not exist: ${target}`);
   }
 
-  let claudeFlowInit = {
-    skipped: true,
-    reason: '--skip-cf-init',
-  };
-
-  if (!skipCfInit) {
-    const initArgs = ['@claude-flow/cli@latest', 'init'];
-    if (mode === 'both') {
-      if (dual) initArgs.push('--dual');
-    } else if (mode === 'codex') {
-      initArgs.push('--codex');
-    }
-
-    const initResult = run('npx', initArgs, target);
-    claudeFlowInit = {
-      skipped: false,
-      command: `npx ${initArgs.join(' ')}`,
-      exitCode: initResult.status,
-      stdout: initResult.stdout.trim().split('\n').slice(-12).join('\n'),
-      stderr: initResult.stderr.trim().split('\n').slice(-12).join('\n'),
-    };
-
-    if (initResult.status !== 0) {
-      throw new Error(
-        `claude-flow init failed in ${target}:\n${claudeFlowInit.stderr || claudeFlowInit.stdout}`
-      );
-    }
-  }
-
   const install = await installIntoRepo({
     targetRepo: target,
-    force,
     installDeps,
     targetMode: mode,
     components,
@@ -606,7 +568,6 @@ export async function initRepo({
   return {
     target,
     targetMode: mode,
-    claudeFlowInit,
     install,
     verify: verifyReport,
   };

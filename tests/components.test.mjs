@@ -389,3 +389,126 @@ describe('GuidanceAdvancedRuntime null objects', () => {
     expect(status.evolutionProposals).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 6: Extended component gating for new modules
+// ---------------------------------------------------------------------------
+describe('GuidanceAdvancedRuntime: new component gating', () => {
+  let tmpDir;
+  let GuidanceAdvancedRuntime;
+  let runtimeAvailable = false;
+
+  beforeAll(async () => {
+    try {
+      const mod = await import('../src/guidance/advanced-runtime.js');
+      GuidanceAdvancedRuntime = mod.GuidanceAdvancedRuntime;
+      runtimeAvailable = true;
+    } catch {
+      // skip
+    }
+  });
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'comp-new-test-'));
+    writeFileSync(resolve(tmpDir, 'CLAUDE.md'), '# Test\n\n- [test-rule] Always test (high) #testing\n');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeComponentsJson(dir, components) {
+    const cfDir = resolve(dir, '.claude-flow/guidance');
+    mkdirSync(cfDir, { recursive: true });
+    writeFileSync(resolve(cfDir, 'components.json'), JSON.stringify({
+      version: 1,
+      components,
+      installedAt: new Date().toISOString(),
+    }));
+  }
+
+  it('coherence component gating works', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, ['coherence']);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.isComponentEnabled('coherence')).toBe(true);
+    expect(rt.isComponentEnabled('authority')).toBe(false);
+  });
+
+  it('null coherence returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.coherenceScheduler.computeCoherence({}, [])).toBe(1.0);
+    expect(rt.economicGovernor.checkBudget().withinBudget).toBe(true);
+  });
+
+  it('null continue-gate returns continue', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.continueGate.evaluate({}).action).toBe('continue');
+  });
+
+  it('null authority returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.irreversibilityClassifier.classify('rm -rf /')).toBe('reversible');
+    expect(rt.authorityGate.canPerform('agent', 'anything')).toBe(true);
+  });
+
+  it('null meta-governor returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.metaGovernor.checkAllInvariants({}).allPassed).toBe(true);
+    expect(rt.metaGovernor.validateOptimizerAction({}).allowed).toBe(true);
+  });
+
+  it('null optimizer returns skipped', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.optimizer.runCycle(null, null).skipped).toBe(true);
+  });
+
+  it('null knowledge layer returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.truthAnchorStore.get('any')).toBeNull();
+    expect(rt.uncertaintyLedger.isActionable('any')).toBe(true);
+    expect(rt.temporalReasoner.whatIsTrue('ns')).toEqual([]);
+  });
+
+  it('null capabilities returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.capabilities.check('a', 'b', 'c', 'd').allowed).toBe(true);
+    expect(rt.capabilities.getCapabilities('agent')).toEqual([]);
+  });
+
+  it('null artifacts returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.artifactLedger.get('any')).toBeNull();
+    expect(rt.artifactLedger.getStats().totalArtifacts).toBe(0);
+  });
+
+  it('null manifest validator returns safe defaults', () => {
+    if (!runtimeAvailable) return;
+    writeComponentsJson(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.manifestValidator.validate({}).valid).toBe(true);
+    expect(rt.manifestValidator.computeRiskScore({})).toBe(0);
+  });
+
+  it('no components.json means 24 components enabled', () => {
+    if (!runtimeAvailable) return;
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.getEnabledComponents().length).toBe(24);
+  });
+});

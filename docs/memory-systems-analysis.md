@@ -11,14 +11,17 @@ AgentDB/HybridBackend) are doing fundamentally the same job — ranking knowledg
 with confidence feedback — using different backends and different sophistication levels.
 The third (governance runtime) is genuinely distinct.
 
-**Recommendation:** Merge Systems 1 and 2 by making `intelligence.cjs` a PageRank
-reranking layer on top of AgentDB v3, eliminating the parallel JSON store. Keep System 3
-(governance) separate.
+**Recommendation:** Do NOT merge Systems 1-3 into one store. Instead, align via
+mandatory bridges. Make `intelligence.cjs` a PageRank reranking layer on top of
+AgentDB v3 (eliminating the parallel JSON store) while keeping System 3 (governance)
+in separate storage with its own trust boundary.
 
-**Progress:** GD-001 (EmbeddingProvider) and GD-002 (MemoryWriteGateHook) are now
-implemented, providing the first concrete bridge between the three systems. GD-001
-establishes a shared vector space across Systems 2 and 3, while GD-002 enforces
-memory integrity using trust scores, embeddings, and pattern analysis.
+**Progress (2026-02-25):** CLI memory patches WM-001 through WM-012 are complete.
+AgentDB v3 is fully wired with self-learning (WM-009), witness chain (WM-010),
+ReasoningBank (WM-011), and proxy methods (WM-012). The EmbeddingProvider and
+MemoryWriteGateHook bridge the systems. See the
+[Guidance Memory Alignment Analysis](../../../worktree/claude-flow-patch-agentdb-upgrade/docs/guidance-memory-alignment.md)
+for the full alignment plan and trust boundary architecture.
 
 ---
 
@@ -416,12 +419,12 @@ flowchart LR
 
 ---
 
-## Bridging the Gap: GD-001 and GD-002
+## Bridging the Gap: EmbeddingProvider and MemoryWriteGateHook
 
 While the three systems historically operated in complete isolation, the guidance
 implementation kit has delivered the first concrete components that bridge them:
 
-### GD-001: EmbeddingProvider
+### EmbeddingProvider Bridge
 
 EmbeddingProvider creates a **shared vector space** used by both the ShardRetriever
 (for task-to-shard matching) and the MemoryWriteGateHook (for semantic contradiction
@@ -432,11 +435,12 @@ detection). Two implementations are provided:
 | `HashEmbeddingProvider` | Deterministic hash-based vectors | Zero dependencies, test-friendly, fast |
 | `AgentDBEmbeddingProvider` | AgentDB v3 HNSW index | Real semantic search, production quality |
 
-By providing a common embedding interface, GD-001 allows the governance layer (System 3)
-to perform semantic operations against the same vector space used by the memory layer
-(System 2). This is the first point of integration between previously isolated systems.
+By providing a common embedding interface, the EmbeddingProvider bridge allows the
+governance layer (System 3) to perform semantic operations against the same vector space
+used by the memory layer (System 2). This is the first point of integration between
+previously isolated systems.
 
-### GD-002: MemoryWriteGateHook
+### MemoryWriteGateHook
 
 MemoryWriteGateHook protects memory integrity with a **4-check pipeline** that sits
 between write requests and the memory store:
@@ -453,8 +457,9 @@ between write requests and the memory store:
    semantically contradict existing memory.
 
 This gate bridges all three systems: it consumes **trust scores from System 3** to
-set rate limits, queries **embeddings via System 2** (through GD-001) for semantic
-checks, and protects the **knowledge store used by System 1** from contradictory writes.
+set rate limits, queries **embeddings via System 2** (through EmbeddingProvider) for
+semantic checks, and protects the **knowledge store used by System 1** from
+contradictory writes.
 
 ---
 
@@ -549,9 +554,9 @@ flowchart TB
 3. **Duplicate graph:** System 1 builds PageRank on JSON. The CLI's MemoryGraph
    (config.json `memory.memoryGraph.*`) does the same computation in-process.
 4. **No trust gating:** System 3's trust scores don't influence System 1's routing
-   or System 2's search ranking. *(Partially addressed: GD-002 MemoryWriteGateHook
-   now uses trust tiers for write rate limiting, and GD-001 EmbeddingProvider enables
-   semantic checks across system boundaries.)*
+   or System 2's search ranking. *(Partially addressed: MemoryWriteGateHook now uses
+   trust tiers for write rate limiting, and EmbeddingProvider enables semantic checks
+   across system boundaries.)*
 
 ---
 
@@ -739,11 +744,11 @@ sequenceDiagram
 
 ## Migration Path
 
-### Phase 1: AgentDB as Primary Store (WM-008)
-- Upgrade agentdb v2 -> v3 in `@claude-flow/memory`
-- Wire `SelfLearningRvfBackend` into `agentdb-backend.js`
-- Change storage path: `.db` -> `.rvf`
-- Add `recordFeedback()` API to backend
+### Phase 1: AgentDB as Primary Store (WM-008) -- COMPLETE
+- ~~Upgrade agentdb v2 -> v3 in `@claude-flow/memory`~~ -- **Done** (WM-008)
+- ~~Wire `SelfLearningRvfBackend` into `agentdb-backend.js`~~ -- **Done** (WM-008)
+- ~~Change storage path: `.db` -> `.rvf`~~ -- **Done** (WM-008)
+- ~~Add `recordFeedback()` API to backend~~ -- **Done** (WM-009 + WM-012)
 
 ### Phase 2: intelligence.cjs Reads from AgentDB
 - Replace `readJSON(STORE_PATH)` with AgentDB `query()` calls
@@ -757,9 +762,11 @@ sequenceDiagram
 - Simplify `auto-memory-hook.mjs` to MEMORY.md <-> AgentDB bridge only
 - Keep `graph-state.json` as optional cache (rebuilt from AgentDB on init)
 
-### Phase 4: Trust-Gated Routing (In Progress)
-- ~~Wire trust scores into memory write path~~ -- **Done:** GD-002 MemoryWriteGateHook uses trust tiers for rate limiting
-- ~~Create shared embedding interface~~ -- **Done:** GD-001 EmbeddingProvider with hash and AgentDB implementations
+### Phase 4: Trust-Gated Routing (Partially Complete)
+- ~~Wire trust scores into memory write path~~ -- **Done:** MemoryWriteGateHook uses trust tiers for rate limiting
+- ~~Create shared embedding interface~~ -- **Done:** EmbeddingProvider with hash and AgentDB implementations
+- Make MemoryWriteGateHook mandatory in `memory_store` write path -- **Planned** (see alignment analysis R1)
+- Wire trust scores into search result ranking -- **Planned** (see alignment analysis R2)
 - Wire `TrustSystem.getScore(agentId)` into `router.cjs` for task routing
 - Gate task routing by agent trust tier
 - Feed routing outcomes back into TrustSystem
@@ -792,10 +799,20 @@ deployed independently, resulting in duplicate storage, duplicate learning loops
 zero cross-system feedback. The target architecture consolidates Systems 1 and 2
 behind AgentDB v3 while keeping the governance layer (System 3) separate.
 
-**GD-001 (EmbeddingProvider) and GD-002 (MemoryWriteGateHook) represent the first
-concrete bridge between the previously isolated systems.** GD-001 establishes a shared
-vector space that both the policy retriever and the memory gate can use, while GD-002
+**EmbeddingProvider and MemoryWriteGateHook represent the first concrete bridge between
+the previously isolated systems.** EmbeddingProvider establishes a shared vector space
+that both the policy retriever and the memory gate can use, while MemoryWriteGateHook
 enforces write integrity using trust scores from the governance layer and semantic
 embeddings from the memory layer. Together, they demonstrate that the three systems can
 interoperate without requiring a full merge -- validating the incremental migration
 strategy outlined in the Migration Path above.
+
+---
+
+## Related Documents
+
+| Document | Repo | Contents |
+|----------|------|----------|
+| [Guidance Memory Alignment Analysis](../../../worktree/claude-flow-patch-agentdb-upgrade/docs/guidance-memory-alignment.md) | patch | Merge vs align decision, trust boundary, phased plan |
+| [Memory System Architecture](../../../worktree/claude-flow-patch-agentdb-upgrade/docs/memory-system.md) | patch | CLI memory system: HybridBackend, session lifecycle, config |
+| [Memory System Analysis](../../../worktree/claude-flow-patch-agentdb-upgrade/docs/memory-system-analysis.md) | patch | Overlap analysis with architecture diagrams |

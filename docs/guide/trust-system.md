@@ -90,7 +90,7 @@ cumulative score.
 
 #### Trust-Based Memory Authority
 
-The MemoryWriteGateHook (GD-002) uses trust tiers to control memory write permissions. As an agent's trust score changes, their effective write authority is adjusted:
+The MemoryWriteGateHook uses trust tiers to control memory write permissions. As an agent's trust score changes, their effective write authority is adjusted:
 
 | Tier | Write Rate | Namespaces | Overwrite | Delete |
 |---|---|---|---|---|

@@ -320,3 +320,125 @@ describe('GuidancePhase1Runtime: getStatus', () => {
     }
   });
 });
+
+// ── Persistence ──────────────────────────────────────────────────────────────
+
+describe('GuidancePhase1Runtime: persistence', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('ledger has persistence methods when enablePersistence is true', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir, enablePersistence: true });
+    expect(typeof rt.ledger?.init).toBe('function');
+    expect(typeof rt.ledger?.save).toBe('function');
+    expect(typeof rt.ledger?.destroy).toBe('function');
+  });
+
+  it('ledger has persistence methods when enablePersistence is false (null-object)', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir, enablePersistence: false });
+    expect(typeof rt.ledger?.init).toBe('function');
+    expect(typeof rt.ledger?.save).toBe('function');
+    expect(typeof rt.ledger?.destroy).toBe('function');
+  });
+
+  it('default option has persistence enabled', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir });
+    // default enablePersistence is true (production-ready default)
+    expect(rt.options.enablePersistence).toBe(true);
+  });
+});
+
+// ── Gateway ──────────────────────────────────────────────────────────────────
+
+describe('GuidancePhase1Runtime: gateway', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('gateway exists when enableGateway is true', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir, enableGateway: true });
+    expect(rt.gateway).toBeDefined();
+    expect(typeof rt.gateway.evaluate).toBe('function');
+    expect(typeof rt.gateway.checkBudget).toBe('function');
+  });
+
+  it('gateway exists as null-object when enableGateway is false', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir, enableGateway: false });
+    expect(rt.gateway).toBeDefined();
+    const result = rt.gateway.evaluate('Bash', { command: 'ls' });
+    expect(result.allowed).toBe(true);
+    expect(result.reason).toBe('gateway-disabled');
+  });
+
+  it('default option has gateway enabled', () => {
+    const rt = new GuidancePhase1Runtime({ rootDir: tmpDir });
+    expect(rt.options.enableGateway).toBe(true);
+  });
+});
+
+// ── destroy() ────────────────────────────────────────────────────────────────
+
+describe('GuidancePhase1Runtime: destroy', () => {
+  it('destroy method exists', () => {
+    const tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    try {
+      const rt = new GuidancePhase1Runtime({ rootDir: tmpDir });
+      expect(typeof rt.destroy).toBe('function');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('destroy does not throw after initialization', async () => {
+    const tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    try {
+      const rt = new GuidancePhase1Runtime({ rootDir: tmpDir });
+      await rt.initialize();
+      expect(() => rt.destroy()).not.toThrow();
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('destroy does not throw without initialization', () => {
+    const rt = new GuidancePhase1Runtime();
+    expect(() => rt.destroy()).not.toThrow();
+  });
+});
+
+// ── Extended getStatus ───────────────────────────────────────────────────────
+
+describe('GuidancePhase1Runtime: extended getStatus', () => {
+  it('status includes persistence fields after init', async () => {
+    const tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+    try {
+      const rt = new GuidancePhase1Runtime({ rootDir: tmpDir });
+      await rt.initialize();
+      const status = rt.getStatus();
+      // These fields may or may not exist depending on implementation
+      // but should not throw
+      expect(status.initialized).toBe(true);
+      expect(typeof status.ledgerEventCount).toBe('number');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

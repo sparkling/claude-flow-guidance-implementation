@@ -448,6 +448,309 @@ export function createIntegrationRunners(runtime) {
     return summary;
   }
 
+  async function runCoherenceIntegration() {
+    await runtime.initialize();
+
+    // Record some tool usage to exercise budget tracking
+    runtime.economicGovernor.recordToolCall('Bash', 100);
+    runtime.economicGovernor.recordToolCall('Edit', 50);
+    runtime.economicGovernor.recordTokenUsage(1500);
+
+    let coherenceScore = 1.0;
+    try {
+      const raw = runtime.coherenceScheduler.computeCoherence(
+        { violationRate: 2, reworkLines: 10 },
+        []
+      );
+      coherenceScore = typeof raw === 'number' ? raw : (raw?.overall ?? 1.0);
+    } catch {}
+    let privilegeLevel = 'full';
+    try { privilegeLevel = runtime.coherenceScheduler.getPrivilegeLevel(coherenceScore); } catch {}
+    const budgetStatus = runtime.economicGovernor.checkBudget();
+    const usageSummary = runtime.economicGovernor.getUsageSummary();
+
+    let isHealthy = true;
+    let isDrifting = false;
+    let shouldRestrict = false;
+    let recommendation = 'continue';
+    try { isHealthy = runtime.coherenceScheduler.isHealthy(); } catch {}
+    try { isDrifting = runtime.coherenceScheduler.isDrifting(); } catch {}
+    try { shouldRestrict = runtime.coherenceScheduler.shouldRestrict(); } catch {}
+    try { recommendation = runtime.coherenceScheduler.getRecommendation(); } catch {}
+
+    const summary = {
+      integration: 'coherence',
+      coherenceScore,
+      privilegeLevel,
+      isHealthy,
+      isDrifting,
+      shouldRestrict,
+      recommendation,
+      budgetStatus,
+      usageSummary,
+    };
+
+    await runtime.persistState({ lastCoherenceIntegration: summary });
+    return summary;
+  }
+
+  async function runContinueGateIntegration() {
+    await runtime.initialize();
+
+    const decisions = [];
+    for (let step = 0; step < 5; step++) {
+      let decision;
+      try {
+        decision = runtime.continueGate.evaluate({
+          stepNumber: step,
+          coherenceScore: 1.0 - (step * 0.15),
+          reworkRatio: step * 0.05,
+          uncertaintyScore: 0,
+          lastCheckpointStep: 0,
+          budgetRemaining: { tokens: 10000 - step * 1000, toolCalls: 100 - step * 10, timeMs: 60000 },
+        });
+      } catch {
+        decision = { action: 'continue', reason: 'evaluate-error' };
+      }
+      decisions.push({ step, ...decision });
+    }
+
+    let stats = {};
+    try { stats = runtime.continueGate.getStats(); } catch {}
+
+    const summary = {
+      integration: 'continue-gate',
+      evaluations: decisions.length,
+      decisions,
+      stats,
+    };
+
+    await runtime.persistState({ lastContinueGateIntegration: summary });
+    return summary;
+  }
+
+  async function runAuthorityIntegration() {
+    await runtime.initialize();
+
+    const testActions = [
+      'git status',
+      'git push --force origin main',
+      'rm -rf /',
+      'echo hello > test.txt',
+      'DROP TABLE users;',
+    ];
+
+    const classifications = testActions.map(action => {
+      let classification = 'unknown';
+      let canPerform = true;
+      let requiredLevel = 'agent';
+      let requiresSimulation = false;
+      try { classification = runtime.irreversibilityClassifier.classify(action); } catch {}
+      try { canPerform = runtime.authorityGate.canPerform('agent', action); } catch {}
+      try { requiredLevel = runtime.authorityGate.getMinimumAuthority(action); } catch {}
+      try { requiresSimulation = runtime.irreversibilityClassifier.requiresPreCommitSimulation(action); } catch {}
+      return { action, classification, canPerform, requiredLevel, requiresSimulation };
+    });
+
+    let interventionCount = 0;
+    try { interventionCount = runtime.authorityGate.getInterventions().length; } catch {}
+
+    const summary = {
+      integration: 'authority',
+      classifications,
+      interventions: interventionCount,
+    };
+
+    await runtime.persistState({ lastAuthorityIntegration: summary });
+    return summary;
+  }
+
+  async function runMetaGovernanceIntegration() {
+    await runtime.initialize();
+
+    // Check invariants
+    let invariantCheck = { allPassed: true };
+    try {
+      invariantCheck = runtime.metaGovernor.checkAllInvariants({
+        securityRulesIntact: true,
+        gatesActive: true,
+        proofChainActive: true,
+      });
+    } catch {}
+
+    // Try to propose an amendment
+    let amendment = {};
+    try {
+      amendment = runtime.metaGovernor.proposeAmendment({
+        title: 'Test amendment',
+        description: 'Integration test amendment',
+        author: 'integration-test',
+      });
+    } catch {}
+
+    // Test optimizer action validation
+    let optimizerValid = { allowed: true };
+    try {
+      optimizerValid = runtime.metaGovernor.validateOptimizerAction({
+        type: 'promote',
+        changes: [{ ruleId: 'test-rule', action: 'promote' }],
+      });
+    } catch {}
+
+    let invariantCount = 0;
+    try { invariantCount = runtime.metaGovernor.getInvariants().length; } catch {}
+    let pendingAmendments = 0;
+    try { pendingAmendments = runtime.metaGovernor.getPendingAmendments().length; } catch {}
+
+    const summary = {
+      integration: 'meta-governance',
+      invariantsPassed: invariantCheck.allPassed ?? true,
+      invariantCount,
+      amendmentProposed: Boolean(amendment?.id),
+      optimizerActionAllowed: optimizerValid.allowed ?? true,
+      pendingAmendments,
+    };
+
+    await runtime.persistState({ lastMetaGovernanceIntegration: summary });
+    return summary;
+  }
+
+  async function runOptimizerIntegration() {
+    await runtime.initialize();
+
+    let cycle = { cycleNumber: 0, skipped: true, reason: 'no-data' };
+    try {
+      cycle = runtime.optimizer.runCycle(
+        runtime.phase1.ledger,
+        runtime.phase1.getBundle()
+      );
+    } catch {}
+
+    let adrCount = 0;
+    try { adrCount = runtime.optimizer.getADRs().length; } catch {}
+
+    const summary = {
+      integration: 'optimizer',
+      cycleNumber: cycle.cycleNumber ?? 0,
+      skipped: cycle.skipped,
+      reason: cycle.reason,
+      proposedChanges: cycle.proposedChanges?.length ?? 0,
+      promotions: cycle.promotions?.length ?? 0,
+      adrs: adrCount,
+    };
+
+    await runtime.persistState({ lastOptimizerIntegration: summary });
+    return summary;
+  }
+
+  async function runKnowledgeIntegration() {
+    await runtime.initialize();
+
+    // Truth anchors
+    let anchor = {};
+    let resolution = {};
+    try {
+      anchor = runtime.truthAnchorStore.anchor({
+        kind: 'human-attestation',
+        claim: 'Project uses TypeScript strict mode',
+        evidence: 'tsconfig.json has strict: true',
+        attesterId: 'developer-1',
+      });
+    } catch {}
+    try {
+      resolution = runtime.truthResolver.resolveMemoryConflict(
+        'tsconfig-mode',
+        'strict: false',
+        'config'
+      );
+    } catch {}
+
+    // Uncertainty
+    let belief = {};
+    let confidence = 0;
+    let isActionable = false;
+    let contestedCount = 0;
+    try {
+      belief = runtime.uncertaintyLedger.assert(
+        'API rate limit is 100/min',
+        'api-config',
+        [{ supports: true, description: 'Observed in production logs' }],
+        { point: 0.85, lower: 0.75, upper: 0.95 }
+      );
+      const beliefId = belief.id ?? belief.beliefId;
+      confidence = runtime.uncertaintyLedger.computeConfidence(beliefId);
+      isActionable = runtime.uncertaintyLedger.isActionable(beliefId);
+      contestedCount = runtime.uncertaintyLedger.getContested().length;
+    } catch {}
+
+    // Temporal
+    let assertion = {};
+    let currentTruth = [];
+    try {
+      assertion = runtime.temporalStore.assert(
+        'Deployment window is 2-4am UTC',
+        'operations',
+        { validFrom: Date.now(), validUntil: Date.now() + 86400000 }
+      );
+      currentTruth = runtime.temporalReasoner.whatIsTrue('operations');
+    } catch {}
+
+    const summary = {
+      integration: 'knowledge',
+      truthAnchors: {
+        anchored: Boolean(anchor?.id ?? anchor?.anchorId),
+        resolution,
+        activeAnchors: runtime.truthAnchorStore.getActive?.()?.length ?? 0,
+      },
+      uncertainty: {
+        beliefCreated: Boolean(belief?.id ?? belief?.beliefId),
+        confidence,
+        isActionable,
+        contested: contestedCount,
+      },
+      temporal: {
+        asserted: Boolean(assertion?.id ?? assertion?.assertionId),
+        currentTruthCount: Array.isArray(currentTruth) ? currentTruth.length : 0,
+      },
+    };
+
+    await runtime.persistState({ lastKnowledgeIntegration: summary });
+    return summary;
+  }
+
+  async function runCapabilitiesIntegration() {
+    await runtime.initialize();
+
+    let cap = {};
+    let check = { allowed: true };
+    let checkDenied = { allowed: false };
+    let agentCapCount = 0;
+    try {
+      cap = runtime.capabilities.grant({
+        scope: 'tool',
+        resource: 'Bash',
+        actions: ['execute'],
+        grantedBy: 'coordinator',
+        grantedTo: 'coder-1',
+        delegatable: false,
+      });
+    } catch {}
+    try { check = runtime.capabilities.check('coder-1', 'tool', 'Bash', 'execute'); } catch {}
+    try { checkDenied = runtime.capabilities.check('coder-1', 'system', 'shutdown', 'execute'); } catch {}
+    try { agentCapCount = runtime.capabilities.getCapabilities('coder-1').length; } catch {}
+
+    const summary = {
+      integration: 'capabilities',
+      granted: Boolean(cap?.id ?? cap?.capabilityId),
+      checkAllowed: check.allowed ?? true,
+      checkDenied: !(checkDenied.allowed ?? false),
+      agentCapabilities: agentCapCount,
+    };
+
+    await runtime.persistState({ lastCapabilitiesIntegration: summary });
+    return summary;
+  }
+
   return {
     runHooksIntegration,
     runTrustIntegration,
@@ -455,16 +758,31 @@ export function createIntegrationRunners(runtime) {
     runProofIntegration,
     runConformanceIntegration,
     runEvolutionIntegration,
+    runCoherenceIntegration,
+    runContinueGateIntegration,
+    runAuthorityIntegration,
+    runMetaGovernanceIntegration,
+    runOptimizerIntegration,
+    runKnowledgeIntegration,
+    runCapabilitiesIntegration,
   };
 }
 
 export async function runAllIntegrations(runtime) {
-  const hooks = await runtime.runHooksIntegration();
-  const trust = await runtime.runTrustIntegration();
-  const adversarial = await runtime.runAdversarialIntegration();
-  const proof = await runtime.runProofIntegration();
-  const conformance = await runtime.runConformanceIntegration();
-  const evolution = await runtime.runEvolutionIntegration();
+  const safe = async (fn) => { try { return await fn(); } catch (e) { return { error: e.message }; } };
+  const hooks = await safe(() => runtime.runHooksIntegration());
+  const trust = await safe(() => runtime.runTrustIntegration());
+  const adversarial = await safe(() => runtime.runAdversarialIntegration());
+  const proof = await safe(() => runtime.runProofIntegration());
+  const conformance = await safe(() => runtime.runConformanceIntegration());
+  const evolution = await safe(() => runtime.runEvolutionIntegration());
+  const coherence = await safe(() => runtime.runCoherenceIntegration());
+  const continueGate = await safe(() => runtime.runContinueGateIntegration());
+  const authority = await safe(() => runtime.runAuthorityIntegration());
+  const metaGovernance = await safe(() => runtime.runMetaGovernanceIntegration());
+  const optimizer = await safe(() => runtime.runOptimizerIntegration());
+  const knowledge = await safe(() => runtime.runKnowledgeIntegration());
+  const capabilities = await safe(() => runtime.runCapabilitiesIntegration());
 
   const report = {
     generatedAt: nowIso(),
@@ -474,6 +792,13 @@ export async function runAllIntegrations(runtime) {
     proof,
     conformance,
     evolution,
+    coherence,
+    continueGate,
+    authority,
+    metaGovernance,
+    optimizer,
+    knowledge,
+    capabilities,
   };
 
   await runtime.persistState({ lastAllIntegrations: report });

@@ -444,3 +444,323 @@ describe('GuidanceAdvancedRuntime: getStatus', () => {
     expect(status.proofChainLength).toBeGreaterThan(0);
   });
 });
+
+// ── New Module Properties ────────────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: new modules', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('has coherenceScheduler property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.coherenceScheduler).toBeDefined();
+    expect(typeof rt.coherenceScheduler.computeCoherence).toBe('function');
+  });
+
+  it('has economicGovernor property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.economicGovernor).toBeDefined();
+    expect(typeof rt.economicGovernor.checkBudget).toBe('function');
+  });
+
+  it('has continueGate property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.continueGate).toBeDefined();
+    expect(typeof rt.continueGate.evaluate).toBe('function');
+  });
+
+  it('has irreversibilityClassifier property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.irreversibilityClassifier).toBeDefined();
+    expect(typeof rt.irreversibilityClassifier.classify).toBe('function');
+  });
+
+  it('has authorityGate property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.authorityGate).toBeDefined();
+    expect(typeof rt.authorityGate.canPerform).toBe('function');
+  });
+
+  it('has metaGovernor property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.metaGovernor).toBeDefined();
+    expect(typeof rt.metaGovernor.addInvariant).toBe('function');
+  });
+
+  it('has optimizer property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.optimizer).toBeDefined();
+    expect(typeof rt.optimizer.runCycle).toBe('function');
+  });
+
+  it('has truthAnchorStore property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.truthAnchorStore).toBeDefined();
+    expect(typeof rt.truthAnchorStore.anchor).toBe('function');
+  });
+
+  it('has truthResolver property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.truthResolver).toBeDefined();
+    expect(typeof rt.truthResolver.resolveMemoryConflict).toBe('function');
+  });
+
+  it('has uncertaintyLedger property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.uncertaintyLedger).toBeDefined();
+    expect(typeof rt.uncertaintyLedger.assert).toBe('function');
+  });
+
+  it('has uncertaintyAggregator property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.uncertaintyAggregator).toBeDefined();
+    expect(typeof rt.uncertaintyAggregator.aggregate).toBe('function');
+  });
+
+  it('has temporalStore property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.temporalStore).toBeDefined();
+    expect(typeof rt.temporalStore.assert).toBe('function');
+  });
+
+  it('has temporalReasoner property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.temporalReasoner).toBeDefined();
+    expect(typeof rt.temporalReasoner.whatIsTrue).toBe('function');
+  });
+
+  it('has capabilities property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.capabilities).toBeDefined();
+    expect(typeof rt.capabilities.grant).toBe('function');
+  });
+
+  it('has artifactLedger property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.artifactLedger).toBeDefined();
+    expect(typeof rt.artifactLedger.record).toBe('function');
+  });
+
+  it('has manifestValidator property', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.manifestValidator).toBeDefined();
+    expect(typeof rt.manifestValidator.validate).toBe('function');
+  });
+
+  it('has stepCounter initialized to 0', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.stepCounter).toBe(0);
+  });
+
+  it('disabled coherence uses null-object', () => {
+    writeComponents(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.coherenceScheduler.computeCoherence({}, [])).toBe(1.0);
+    expect(rt.coherenceScheduler.isHealthy()).toBe(true);
+  });
+
+  it('disabled continue-gate uses null-object', () => {
+    writeComponents(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.continueGate.evaluate({}).action).toBe('continue');
+  });
+
+  it('disabled authority uses null-object', () => {
+    writeComponents(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.irreversibilityClassifier.classify('rm -rf /')).toBe('reversible');
+    expect(rt.authorityGate.canPerform('agent', 'anything')).toBe(true);
+  });
+
+  it('disabled optimizer uses null-object', () => {
+    writeComponents(tmpDir, []);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    const cycle = rt.optimizer.runCycle(null, null);
+    expect(cycle.skipped).toBe(true);
+  });
+});
+
+// ── Meta-Governance Invariants ───────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: meta-governance invariants', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('registers invariants on initialize when meta-governance enabled', async () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    await rt.initialize();
+    const invariants = rt.metaGovernor.getInvariants();
+    // Should have at least the 3 constitutional invariants
+    // (may be [] if meta-governance is null-object with all components enabled and upstream provides real ones)
+    expect(Array.isArray(invariants)).toBe(true);
+  });
+
+  it('skips invariant registration when meta-governance disabled', async () => {
+    writeComponents(tmpDir, ['trust', 'proof']);
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    await rt.initialize();
+    const invariants = rt.metaGovernor.getInvariants();
+    expect(invariants).toEqual([]);
+  });
+});
+
+// ── Extended persistState ────────────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: extended persistState', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('persists new module state fields', async () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    await rt.initialize();
+    await rt.persistState();
+
+    const state = JSON.parse(readFileSync(rt.statePath, 'utf-8'));
+    expect(state.coherenceHistory).toBeDefined();
+    expect(state.economicUsage).toBeDefined();
+    expect(state.continueGateStats).toBeDefined();
+    expect(state.authorityInterventions).toBeDefined();
+    expect(state.metaGovernanceInvariants).toBeDefined();
+    expect(state.optimizerLastRun).toBeDefined();
+    expect(typeof state.stepCounter).toBe('number');
+  });
+});
+
+// ── Extended getStatus ───────────────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: extended getStatus', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('includes all new module fields', async () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    await rt.initialize();
+    const status = rt.getStatus();
+
+    expect(typeof status.coherenceScore).toBe('number');
+    expect(typeof status.coherenceHealthy).toBe('boolean');
+    expect(status.economicBudget).toBeDefined();
+    expect(status.continueGateStats).toBeDefined();
+    expect(typeof status.authorityInterventions).toBe('number');
+    expect(typeof status.metaGovernanceInvariants).toBe('number');
+    expect(status).toHaveProperty('optimizerLastRun');
+    expect(typeof status.truthAnchorsActive).toBe('number');
+    expect(typeof status.uncertaintyContested).toBe('number');
+    expect(typeof status.capabilitiesGranted).toBe('number');
+    expect(typeof status.artifactsRecorded).toBe('number');
+  });
+});
+
+// ── New Integration Runners Bound ────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: new runner bindings', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('has all 13 runner methods bound', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(typeof rt.runHooksIntegration).toBe('function');
+    expect(typeof rt.runTrustIntegration).toBe('function');
+    expect(typeof rt.runAdversarialIntegration).toBe('function');
+    expect(typeof rt.runProofIntegration).toBe('function');
+    expect(typeof rt.runConformanceIntegration).toBe('function');
+    expect(typeof rt.runEvolutionIntegration).toBe('function');
+    expect(typeof rt.runCoherenceIntegration).toBe('function');
+    expect(typeof rt.runContinueGateIntegration).toBe('function');
+    expect(typeof rt.runAuthorityIntegration).toBe('function');
+    expect(typeof rt.runMetaGovernanceIntegration).toBe('function');
+    expect(typeof rt.runOptimizerIntegration).toBe('function');
+    expect(typeof rt.runKnowledgeIntegration).toBe('function');
+    expect(typeof rt.runCapabilitiesIntegration).toBe('function');
+    expect(typeof rt.runAllIntegrations).toBe('function');
+  });
+});
+
+// ── Default components set ───────────────────────────────────────────────────
+
+describe('GuidanceAdvancedRuntime: default components', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+    writeClaudeMd(tmpDir);
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('default set has 24 components (no components.json)', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    const components = rt.getEnabledComponents();
+    expect(components.length).toBe(24);
+  });
+
+  it('default set includes all Phase A components', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.isComponentEnabled('persistence')).toBe(true);
+    expect(rt.isComponentEnabled('coherence')).toBe(true);
+    expect(rt.isComponentEnabled('continue-gate')).toBe(true);
+    expect(rt.isComponentEnabled('gateway')).toBe(true);
+    expect(rt.isComponentEnabled('authority')).toBe(true);
+    expect(rt.isComponentEnabled('meta-governance')).toBe(true);
+    expect(rt.isComponentEnabled('optimizer')).toBe(true);
+  });
+
+  it('default set includes all Phase B components', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.isComponentEnabled('truth-anchors')).toBe(true);
+    expect(rt.isComponentEnabled('uncertainty')).toBe(true);
+    expect(rt.isComponentEnabled('temporal')).toBe(true);
+    expect(rt.isComponentEnabled('capabilities')).toBe(true);
+    expect(rt.isComponentEnabled('headless')).toBe(true);
+  });
+
+  it('default set includes all Phase C components', () => {
+    const rt = new GuidanceAdvancedRuntime({ rootDir: tmpDir });
+    expect(rt.isComponentEnabled('wasm-kernel')).toBe(true);
+    expect(rt.isComponentEnabled('generators')).toBe(true);
+    expect(rt.isComponentEnabled('artifacts')).toBe(true);
+    expect(rt.isComponentEnabled('manifest-validator')).toBe(true);
+  });
+});

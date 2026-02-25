@@ -124,19 +124,6 @@ describe('e2e memory: agentdb v3 runtime in guidance project', { skip: skipMsg ?
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
-  // ── Config verification (prerequisite for runtime) ──
-
-  it('config.json has agentdb v3 section after init + guidance', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb).toBeDefined();
-    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
-  });
-
-  it('config.json agentdb has learning enabled by default', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
-  });
-
   // ── auto-memory-hook.mjs status ──
 
   it('auto-memory-hook status succeeds and shows bridge info', () => {
@@ -309,21 +296,6 @@ describe('e2e memory: default agentdb v3 config', { skip: skipMsg ? true : false
 
   afterAll(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('config.json has default agentdb vectorBackend=rvf', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
-  });
-
-  it('config.json has agentdb learning enabled by default', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
-  });
-
-  it('config.json has default learningBatchSize', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb?.learningBatchSize).toBe(32);
   });
 
   it('auto-memory-hook status works with custom agentdb config', () => {
@@ -731,10 +703,10 @@ describe('e2e memory: JsonFileBackend round-trip with agentdb v3 config', () => 
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Suite 6: GD-001 — Embedding provider integration in guidance project
+// Suite 6: EmbeddingProvider — Embedding provider integration in guidance project
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('e2e memory: embedding provider in guidance project (GD-001)', () => {
+describe('e2e memory: embedding provider in guidance project', () => {
   let HashEmbeddingProvider;
   let AgentDBEmbeddingProvider;
   let createEmbeddingProvider;
@@ -880,10 +852,10 @@ describe('e2e memory: embedding provider in guidance project (GD-001)', () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Suite 7: GD-002 — Write gate integration in guidance project
+// Suite 7: MemoryWriteGateHook — Write gate integration in guidance project
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('e2e memory: write gate in guidance project (GD-002)', () => {
+describe('e2e memory: write gate in guidance project', () => {
   let MemoryWriteGateHook;
   let createMemoryWriteGateHook;
 

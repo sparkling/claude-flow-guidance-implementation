@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const HANDLER = resolve('/home/claude/src/claude-flow-guidance-implementation/src/hook-handler.cjs');
+const HANDLER = resolve('/home/claude/src/claude-flow-guidance-implementation/src/enforcement.cjs');
 const CWD = resolve('/home/claude/src/claude-flow-guidance-implementation');
 
 function runHandler(command, stdinJson = null, env = {}) {
@@ -22,24 +22,17 @@ function runHandler(command, stdinJson = null, env = {}) {
   return spawnSync('node', args, opts);
 }
 
-describe('hook-handler.cjs', () => {
+describe('enforcement.cjs', () => {
   it('no command prints usage and exits 0', () => {
     const result = runHandler(null);
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Usage:');
-    expect(result.stdout).toContain('hook-handler.cjs');
+    expect(result.stdout).toContain('guidance-enforcement.cjs');
   });
 
-  it('status prints [OK] Status check', () => {
-    const result = runHandler('status');
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('[OK] Status check');
-  });
-
-  it('pre-bash with safe command (git status) prints [OK] Command validated', () => {
-    const result = runHandler('pre-bash', {
+  it('pre-command with safe command (git status) prints [OK] Command validated', () => {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'git status' },
     });
 
@@ -47,8 +40,8 @@ describe('hook-handler.cjs', () => {
     expect(result.stdout).toContain('[OK] Command validated');
   });
 
-  it('pre-bash with rm -rf / exits 1 with BLOCKED', () => {
-    const result = runHandler('pre-bash', {
+  it('pre-command with rm -rf / exits 1 with BLOCKED', () => {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'rm -rf /' },
     });
 
@@ -79,17 +72,13 @@ describe('hook-handler.cjs', () => {
     expect(result.stdout).toContain('[OK] Edit recorded');
   });
 
-  it('pre-task prints OK or routing info', () => {
+  it('pre-task prints [OK] Task started', () => {
     const result = runHandler('pre-task', {
       tool_input: { description: 'test task' },
     });
 
     expect(result.status).toBe(0);
-    // Should print either routing info or OK
-    const out = result.stdout;
-    const hasOk = out.includes('[OK]');
-    const hasRouting = out.includes('[INFO]');
-    expect(hasOk || hasRouting).toBe(true);
+    expect(result.stdout).toContain('[OK] Task started');
   });
 
   it('post-task prints [OK] Task completed', () => {
@@ -97,6 +86,20 @@ describe('hook-handler.cjs', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[OK] Task completed');
+  });
+
+  it('session-end prints [OK] Session ended', () => {
+    const result = runHandler('session-end');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('[OK] Session ended');
+  });
+
+  it('session-restore prints [OK] Session restored', () => {
+    const result = runHandler('session-restore');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('[OK] Session restored');
   });
 
   it('compact-manual prints guidance text', () => {
@@ -113,6 +116,27 @@ describe('hook-handler.cjs', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Auto-Compact Guidance');
     expect(result.stdout).toContain('GOLDEN RULE');
+  });
+
+  it('user-prompt prints [OK]', () => {
+    const result = runHandler('user-prompt');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('[OK] User prompt received');
+  });
+
+  it('post-tool-failure prints [OK]', () => {
+    const result = runHandler('post-tool-failure');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('[OK] Tool failure noted');
+  });
+
+  it('stop prints [OK]', () => {
+    const result = runHandler('stop');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('[OK] Stop acknowledged');
   });
 
   it('unknown command prints [OK] Hook:', () => {

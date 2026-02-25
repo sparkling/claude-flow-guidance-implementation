@@ -6,7 +6,7 @@
  *
  * Does NOT test the upstream @claude-flow/guidance package (1,328 tests).
  * Tests that OUR integration correctly wires the runtime pipeline:
- *   hook-handler.cjs → guidance-integrations.js → event-handlers.js → runtime
+ *   enforcement.cjs → guidance-integrations.js → event-handlers.js → runtime
  */
 
 import {
@@ -52,11 +52,11 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf-8'));
 }
 
-function writeRealHandler(targetDir) {
-  const realHandler = readFileSync(resolve(PROJECT_ROOT, 'src/hook-handler.cjs'), 'utf-8');
+function writeRealEnforcement(targetDir) {
+  const realEnforcement = readFileSync(resolve(PROJECT_ROOT, 'src/enforcement.cjs'), 'utf-8');
   const helpersDir = resolve(targetDir, '.claude/helpers');
   mkdirSync(helpersDir, { recursive: true });
-  writeFileSync(resolve(helpersDir, 'hook-handler.cjs'), realHandler);
+  writeFileSync(resolve(helpersDir, 'guidance-enforcement.cjs'), realEnforcement);
 }
 
 function ensureClaudeMd(dir) {
@@ -155,7 +155,7 @@ describe('e2e behavioral: full event pipeline', { skip: shouldSkip ? true : fals
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
   }, 90000);
 
   afterAll(() => {
@@ -429,7 +429,7 @@ describe('e2e behavioral: component gating', { skip: shouldSkip ? true : false }
     ensureClaudeMd(dir);
     // Only trust + proof enabled; adversarial, conformance, evolution are null objects
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', components: ['trust', 'proof'] });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
   }, 90000);
 
   afterAll(() => {
@@ -487,7 +487,7 @@ describe('e2e behavioral: trust accumulation', { skip: shouldSkip ? true : false
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
 
     // Run two consecutive events for the same agent
     const first = runGuidanceEvent(dir, 'pre-command', {
@@ -551,7 +551,7 @@ describe('e2e behavioral: multi-agent proof chain', { skip: shouldSkip ? true : 
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
 
     // Run events from two different agents
     runGuidanceEvent(dir, 'pre-command', { command: 'git status', agentId: 'agent-alpha' });
@@ -586,10 +586,10 @@ describe('e2e behavioral: multi-agent proof chain', { skip: shouldSkip ? true : 
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Suite: Hook-handler.cjs subprocess dispatch
+// Suite: Enforcement handler subprocess dispatch
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('e2e behavioral: hook-handler dispatch', { skip: shouldSkip ? true : false }, () => {
+describe('e2e behavioral: enforcement dispatch', { skip: shouldSkip ? true : false }, () => {
   let dir;
 
   beforeAll(async () => {
@@ -598,7 +598,7 @@ describe('e2e behavioral: hook-handler dispatch', { skip: shouldSkip ? true : fa
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
   }, 90000);
 
   afterAll(() => {
@@ -606,7 +606,7 @@ describe('e2e behavioral: hook-handler dispatch', { skip: shouldSkip ? true : fa
   });
 
   function runHookHandler(command, stdinPayload = {}, timeout = 15000) {
-    const handlerPath = join(dir, '.claude/helpers/hook-handler.cjs');
+    const handlerPath = join(dir, '.claude/helpers/guidance-enforcement.cjs');
     return spawnSync(
       process.execPath,
       [handlerPath, command],
@@ -626,8 +626,8 @@ describe('e2e behavioral: hook-handler dispatch', { skip: shouldSkip ? true : fa
     );
   }
 
-  it('pre-bash with safe command prints [OK]', () => {
-    const r = runHookHandler('pre-bash', { tool_input: { command: 'echo hello' } });
+  it('pre-command with safe command prints [OK]', () => {
+    const r = runHookHandler('pre-command', { tool_input: { command: 'echo hello' } });
     expect(r.status).toBe(0);
     expect(r.stdout).toContain('[OK]');
   });
@@ -644,10 +644,10 @@ describe('e2e behavioral: hook-handler dispatch', { skip: shouldSkip ? true : fa
     expect(r.stdout).toContain('[OK]');
   });
 
-  it('pre-task prints [OK] or routing info', () => {
+  it('pre-task prints [OK]', () => {
     const r = runHookHandler('pre-task', { tool_input: { description: 'Implement feature X' } });
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/\[OK\]|\[INFO\]/);
+    expect(r.stdout).toContain('[OK]');
   });
 
   it('post-task prints [OK]', () => {
@@ -689,7 +689,7 @@ describe('e2e behavioral: error handling', { skip: shouldSkip ? true : false }, 
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
   }, 90000);
 
   afterAll(() => {
@@ -740,17 +740,16 @@ describe('e2e behavioral: error handling', { skip: shouldSkip ? true : false }, 
 // ══════════════════════════════════════════════════════════════════════════════
 // Suite: Full session lifecycle — guidance + memory cross-cutting (WM-008)
 //
-// Exercises the REAL hook-handler.cjs entry point and verifies BOTH
-// guidance state (proof chain, trust) AND memory state (intelligence graph,
-// pending insights, ranked context, confidence feedback) after a simulated
-// full session with agentdb v3 config.
+// Exercises the REAL enforcement.cjs entry point and verifies guidance
+// state (proof chain, trust) after a simulated full session with
+// agentdb v3 config.
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', { skip: shouldSkip ? true : false }, () => {
   let dir;
 
   function runHookHandler(command, stdinPayload = {}, timeout = 15000) {
-    const handlerPath = join(dir, '.claude/helpers/hook-handler.cjs');
+    const handlerPath = join(dir, '.claude/helpers/guidance-enforcement.cjs');
     return spawnSync(
       process.execPath,
       [handlerPath, command],
@@ -776,7 +775,7 @@ describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', {
     if (r.status !== 0) throw new Error(`init failed: ${r.stderr}`);
     ensureClaudeMd(dir);
     await installIntoRepo({ targetRepo: dir, targetMode: 'claude', preset: 'full' });
-    writeRealHandler(dir);
+    writeRealEnforcement(dir);
 
     // Seed memory store with agentdb v3-related entries
     const dataDir = join(dir, '.claude-flow', 'data');
@@ -799,14 +798,6 @@ describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', {
     if (dir) rmSync(dir, { recursive: true, force: true });
   });
 
-  // ── Verify agentdb v3 config was generated ──
-
-  it('init generated config.json with agentdb v3 section', () => {
-    const cfg = readJson(join(dir, '.claude-flow', 'config.json'));
-    expect(cfg.memory?.agentdb?.vectorBackend).toBe('rvf');
-    expect(cfg.memory?.agentdb?.enableLearning).toBe(true);
-  });
-
   // ── Step 1: session-restore initializes both systems ──
 
   describe('Step 1: session-restore', () => {
@@ -815,63 +806,17 @@ describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', {
 
     it('exits 0', () => { expect(result.status).toBe(0); });
 
-    it('intelligence.init() was called (graph loaded)', () => {
-      // session-restore calls intel.init(), which should build graph from seeded store
-      expect(result.stdout).toContain('[INTELLIGENCE]');
-    });
-
-    it('graph-state.json created from seeded memory entries', () => {
-      const graphPath = join(dir, '.claude-flow', 'data', 'graph-state.json');
-      expect(existsSync(graphPath)).toBe(true);
-      const graph = readJson(graphPath);
-      expect(graph.nodeCount).toBe(2);
-    });
-
-    it('ranked-context.json created with PageRank scores', () => {
-      const rankedPath = join(dir, '.claude-flow', 'data', 'ranked-context.json');
-      expect(existsSync(rankedPath)).toBe(true);
-      const ranked = readJson(rankedPath);
-      expect(ranked.entries.length).toBe(2);
-      expect(typeof ranked.entries[0].pageRank).toBe('number');
+    it('prints [OK] Session restored', () => {
+      expect(result.stdout).toContain('[OK]');
     });
   });
 
-  // ── Step 2: route — intelligence provides context ──
+  // ── Step 2: pre-command → guidance + trust ──
 
-  describe('Step 2: route (intelligence context)', () => {
+  describe('Step 2: pre-command (guidance + trust)', () => {
     let result;
     beforeAll(() => {
-      result = spawnSync(
-        process.execPath,
-        [join(dir, '.claude/helpers/hook-handler.cjs'), 'route'],
-        {
-          cwd: dir,
-          env: {
-            ...process.env,
-            CLAUDE_PROJECT_DIR: dir,
-            PROMPT: 'implement agentdb v3 RVF storage migration',
-            NODE_NO_WARNINGS: '1',
-          },
-          encoding: 'utf-8',
-          timeout: 15000,
-        }
-      );
-    });
-
-    it('exits 0', () => { expect(result.status).toBe(0); });
-
-    it('outputs intelligence context for matching prompt', () => {
-      // getContext should match our seeded entries about agentdb v3
-      expect(result.stdout).toContain('[INTELLIGENCE]');
-    });
-  });
-
-  // ── Step 3: pre-bash → guidance + trust ──
-
-  describe('Step 3: pre-bash (guidance + trust)', () => {
-    let result;
-    beforeAll(() => {
-      result = runHookHandler('pre-bash', { tool_input: { command: 'npm test' } });
+      result = runHookHandler('pre-command', { tool_input: { command: 'npm test' } });
     });
 
     it('exits 0 with [OK]', () => {
@@ -887,30 +832,25 @@ describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', {
     });
   });
 
-  // ── Step 4: post-edit → intelligence.recordEdit() + guidance ──
+  // ── Step 3: post-edit → guidance (async fire-and-forget) ──
 
-  describe('Step 4: post-edit (memory + guidance)', () => {
+  describe('Step 3: post-edit (guidance)', () => {
     beforeAll(() => {
-      // Edit agentdb-backend.js 4 times to trigger insight creation on consolidate
       for (let i = 0; i < 4; i++) {
         runHookHandler('post-edit', { tool_input: { file_path: 'memory/agentdb-backend.js' } });
       }
     });
 
-    it('pending-insights.jsonl has recorded edits', () => {
-      const pendingPath = join(dir, '.claude-flow', 'data', 'pending-insights.jsonl');
-      expect(existsSync(pendingPath)).toBe(true);
-      const lines = readFileSync(pendingPath, 'utf-8').trim().split('\n').filter(Boolean);
-      expect(lines.length).toBe(4);
-      const parsed = JSON.parse(lines[0]);
-      expect(parsed.type).toBe('edit');
-      expect(parsed.file).toBe('memory/agentdb-backend.js');
+    it('exits 0 with [OK] Edit recorded', () => {
+      const r = runHookHandler('post-edit', { tool_input: { file_path: 'memory/agentdb-backend.js' } });
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('[OK]');
     });
   });
 
-  // ── Step 5: pre-task + post-task → guidance trust + intelligence feedback ──
+  // ── Step 4: pre-task + post-task → guidance trust ──
 
-  describe('Step 5: pre-task + post-task (trust + feedback)', () => {
+  describe('Step 4: pre-task + post-task (trust)', () => {
     beforeAll(() => {
       runHookHandler('pre-task', {
         tool_input: { description: 'Upgrade agentdb to v3 with RVF storage' },
@@ -926,82 +866,29 @@ describe('e2e behavioral: guidance + memory cross-cutting lifecycle (WM-008)', {
       const state = readJson(statePath);
       expect(state.trustSnapshots).toBeDefined();
     });
-
-    it('intelligence feedback boosted confidence for matched patterns', () => {
-      const rankedPath = join(dir, '.claude-flow', 'data', 'ranked-context.json');
-      const ranked = readJson(rankedPath);
-      // After route + getContext + feedback(true), at least one entry should be accessed
-      const accessed = ranked.entries.filter(e => e.accessCount > 0);
-      expect(accessed.length).toBeGreaterThanOrEqual(1);
-    });
   });
 
-  // ── Step 6: session-end → intelligence.consolidate() + guidance conformance ──
+  // ── Step 5: session-end → guidance conformance ──
 
-  describe('Step 6: session-end (consolidate + conformance)', () => {
+  describe('Step 5: session-end (conformance)', () => {
     let result;
     beforeAll(() => { result = runHookHandler('session-end'); });
 
     it('exits 0', () => { expect(result.status).toBe(0); });
 
-    it('intelligence consolidation ran', () => {
-      // consolidate() processes pending insights and creates new entries
-      expect(result.stdout).toContain('[INTELLIGENCE]');
-    });
-
-    it('pending-insights.jsonl cleared after consolidation', () => {
-      const pendingPath = join(dir, '.claude-flow', 'data', 'pending-insights.jsonl');
-      const content = readFileSync(pendingPath, 'utf-8').trim();
-      expect(content).toBe('');
-    });
-
-    it('new insight entry created for frequently-edited agentdb file', () => {
-      const store = readJson(join(dir, '.claude-flow', 'data', 'auto-memory-store.json'));
-      const insight = store.find(e => e.metadata?.autoGenerated && e.content?.includes('agentdb-backend.js'));
-      expect(insight).toBeDefined();
-      expect(insight.namespace).toBe('insights');
-    });
-
-    it('graph updated with new insight node (2 original + 1 insight = 3)', () => {
-      const graph = readJson(join(dir, '.claude-flow', 'data', 'graph-state.json'));
-      expect(graph.nodeCount).toBe(3);
-    });
-
-    it('intelligence snapshot saved for delta tracking', () => {
-      const snapPath = join(dir, '.claude-flow', 'data', 'intelligence-snapshot.json');
-      expect(existsSync(snapPath)).toBe(true);
-      const snaps = readJson(snapPath);
-      expect(Array.isArray(snaps)).toBe(true);
-      expect(snaps.length).toBeGreaterThanOrEqual(1);
+    it('prints [OK] Session ended', () => {
+      expect(result.stdout).toContain('[OK]');
     });
   });
 
-  // ── Final state: both systems coherent ──
+  // ── Final state: guidance coherent ──
 
-  describe('Final state: cross-system coherence', () => {
-    it('memory store has original entries + auto-generated insights', () => {
-      const store = readJson(join(dir, '.claude-flow', 'data', 'auto-memory-store.json'));
-      expect(store.length).toBeGreaterThanOrEqual(3); // 2 original + 1+ insights
-      const originals = store.filter(e => !e.metadata?.autoGenerated);
-      const insights = store.filter(e => e.metadata?.autoGenerated);
-      expect(originals.length).toBe(2);
-      expect(insights.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('intelligence ranked-context has all entries with scores', () => {
-      const ranked = readJson(join(dir, '.claude-flow', 'data', 'ranked-context.json'));
-      expect(ranked.entries.length).toBeGreaterThanOrEqual(3);
-      for (const entry of ranked.entries) {
-        expect(typeof entry.pageRank).toBe('number');
-        expect(typeof entry.confidence).toBe('number');
-      }
-    });
-
+  describe('Final state: guidance coherence', () => {
     it('guidance proof chain accumulated envelopes from all events', () => {
       const proofPath = join(dir, '.claude-flow', 'guidance', 'advanced', 'proof-chain.json');
       if (!existsSync(proofPath)) return;
       const proof = readJson(proofPath);
-      // pre-bash + post-edit(x4 async) + pre-task + post-task + session-end
+      // pre-command + pre-task (sync events that write proof)
       expect(proof.envelopes.length).toBeGreaterThanOrEqual(1);
     });
 

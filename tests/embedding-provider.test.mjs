@@ -1,5 +1,5 @@
 /**
- * Embedding Provider Tests (GD-001)
+ * Embedding Provider Tests
  *
  * Tests:
  *   - HashEmbeddingProvider: determinism, normalization, dimension, batch

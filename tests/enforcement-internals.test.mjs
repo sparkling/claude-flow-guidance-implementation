@@ -4,7 +4,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 
-const HANDLER = resolve('src/hook-handler.cjs');
+const HANDLER = resolve('src/enforcement.cjs');
 const CWD = resolve('.');
 
 function runHandler(command, stdinJson = null, env = {}, extraArgs = []) {
@@ -26,11 +26,11 @@ function runHandler(command, stdinJson = null, env = {}, extraArgs = []) {
   return spawnSync('node', args, opts);
 }
 
-// ── Dangerous command patterns ──────────────────────────────────────────────
+// -- Dangerous command patterns -----------------------------------------------
 
-describe('hook-handler: dangerous command patterns', () => {
+describe('enforcement: dangerous command patterns', () => {
   it('blocks fork bomb :(){ :|:& };:', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: ':(){ :|:& };:' },
     });
     expect(result.status).toBe(1);
@@ -38,7 +38,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('blocks format c: (case-insensitive)', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'FORMAT C:' },
     });
     expect(result.status).toBe(1);
@@ -46,7 +46,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('blocks del /s /q c:\\', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'del /s /q c:\\' },
     });
     expect(result.status).toBe(1);
@@ -54,7 +54,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('blocks rm -rf / with extra spaces', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'rm  -rf  /' },
     });
     expect(result.status).toBe(1);
@@ -62,7 +62,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('allows safe commands through', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'npm test' },
     });
     expect(result.status).toBe(0);
@@ -70,7 +70,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('allows ls -la (not dangerous)', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'ls -la /tmp' },
     });
     expect(result.status).toBe(0);
@@ -78,7 +78,7 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 
   it('allows empty command through (no crash)', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: '' },
     });
     expect(result.status).toBe(0);
@@ -86,11 +86,11 @@ describe('hook-handler: dangerous command patterns', () => {
   });
 });
 
-// ── parseJsonOutput behavior (tested via guidance event flow) ───────────────
+// -- stdin JSON parsing -------------------------------------------------------
 
-describe('hook-handler: stdin JSON parsing', () => {
+describe('enforcement: stdin JSON parsing', () => {
   it('handles valid stdin JSON', () => {
-    const result = runHandler('pre-bash', JSON.stringify({
+    const result = runHandler('pre-command', JSON.stringify({
       tool_input: { command: 'echo hello' },
     }));
     expect(result.status).toBe(0);
@@ -98,33 +98,32 @@ describe('hook-handler: stdin JSON parsing', () => {
   });
 
   it('handles empty stdin gracefully', () => {
-    const result = runHandler('pre-bash', '');
+    const result = runHandler('pre-command', '');
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[OK]');
   });
 
   it('handles malformed JSON stdin gracefully', () => {
-    const result = runHandler('pre-bash', '{not valid json');
+    const result = runHandler('pre-command', '{not valid json');
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[OK]');
   });
 
   it('handles null tool_input gracefully', () => {
-    const result = runHandler('pre-bash', JSON.stringify({ tool_input: null }));
+    const result = runHandler('pre-command', JSON.stringify({ tool_input: null }));
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[OK]');
   });
 });
 
-// ── Task cache round-trip ───────────────────────────────────────────────────
+// -- Task cache round-trip ----------------------------------------------------
 
-describe('hook-handler: task cache round-trip', () => {
+describe('enforcement: task cache round-trip', () => {
   let tmpDir;
 
   beforeEach(() => {
-    tmpDir = resolve(tmpdir(), `hh-cache-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    tmpDir = resolve(tmpdir(), `enf-cache-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpDir, { recursive: true });
-    // Create minimal CLAUDE.md so hook doesn't fail
     writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Test\n- NEVER use eval()');
   });
 
@@ -135,13 +134,11 @@ describe('hook-handler: task cache round-trip', () => {
   it('pre-task stores task context, post-task retrieves it', () => {
     const env = { CLAUDE_PROJECT_DIR: tmpDir };
 
-    // Run pre-task to store context
     const preResult = runHandler('pre-task', {
       tool_input: { description: 'implement auth module' },
     }, env);
     expect(preResult.status).toBe(0);
 
-    // Check cache file was created
     const cachePath = join(tmpDir, '.claude-flow', 'guidance', 'hook-task-cache.json');
     expect(existsSync(cachePath)).toBe(true);
 
@@ -151,7 +148,6 @@ describe('hook-handler: task cache round-trip', () => {
     expect(cache.last.taskId).toBeDefined();
     expect(cache.last.updatedAt).toBeGreaterThan(0);
 
-    // Run post-task — should retrieve remembered context
     const postResult = runHandler('post-task', {}, env);
     expect(postResult.status).toBe(0);
     expect(postResult.stdout).toContain('[OK] Task completed');
@@ -172,11 +168,10 @@ describe('hook-handler: task cache round-trip', () => {
   });
 });
 
-// ── stableId determinism ────────────────────────────────────────────────────
+// -- stableId determinism -----------------------------------------------------
 
-describe('hook-handler: stable ID generation', () => {
+describe('enforcement: stable ID generation', () => {
   it('same description produces same task ID prefix', () => {
-    // Run twice with same description — stableId should produce same hash
     const desc = 'implement authentication';
     const result1 = runHandler('pre-task', {
       tool_input: { description: desc },
@@ -184,14 +179,12 @@ describe('hook-handler: stable ID generation', () => {
     const result2 = runHandler('pre-task', {
       tool_input: { description: desc },
     });
-    // Both should succeed
     expect(result1.status).toBe(0);
     expect(result2.status).toBe(0);
   });
 
   it('stableId matches expected sha256 format', () => {
-    // We can verify the format by checking the task cache
-    const tmpDir = resolve(tmpdir(), `hh-stableid-${Date.now()}`);
+    const tmpDir = resolve(tmpdir(), `enf-stableid-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Test');
 
@@ -204,10 +197,8 @@ describe('hook-handler: stable ID generation', () => {
       if (existsSync(cachePath)) {
         const cache = JSON.parse(readFileSync(cachePath, 'utf-8'));
         const taskId = cache.last.taskId;
-        // Format: prefix-<12 hex chars>
         expect(taskId).toMatch(/^pre-task-[0-9a-f]{12}$/);
 
-        // Verify determinism: compute expected hash
         const expected = createHash('sha256')
           .update('test seed value')
           .digest('hex')
@@ -220,11 +211,11 @@ describe('hook-handler: stable ID generation', () => {
   });
 });
 
-// ── guidanceBlockMessage ────────────────────────────────────────────────────
+// -- guidanceBlockMessage -----------------------------------------------------
 
-describe('hook-handler: guidance block message formatting', () => {
+describe('enforcement: guidance block message formatting', () => {
   it('guidanceWiringEnabled=0 prevents guidance calls', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: { command: 'echo hello' },
     }, { GUIDANCE_EVENT_WIRING_ENABLED: '0' });
 
@@ -241,70 +232,30 @@ describe('hook-handler: guidance block message formatting', () => {
   });
 });
 
-// ── Session handlers ────────────────────────────────────────────────────────
+// -- Session handlers ---------------------------------------------------------
 
-describe('hook-handler: session handlers', () => {
-  it('session-restore prints session info', () => {
+describe('enforcement: session handlers', () => {
+  it('session-restore prints [OK] Session restored', () => {
     const result = runHandler('session-restore');
     expect(result.status).toBe(0);
-    const out = result.stdout;
-    // Should print session restored or intelligence loaded
-    expect(out.length).toBeGreaterThan(0);
-    const hasSession = out.includes('Session') || out.includes('session');
-    const hasOk = out.includes('[OK]');
-    const hasIntel = out.includes('[INTELLIGENCE]');
-    expect(hasSession || hasOk || hasIntel).toBe(true);
+    expect(result.stdout).toContain('[OK] Session restored');
   });
 
-  it('session-end prints session ended', () => {
+  it('session-end prints [OK] Session ended', () => {
     const result = runHandler('session-end');
     expect(result.status).toBe(0);
-    const out = result.stdout;
-    expect(out.length).toBeGreaterThan(0);
-  });
-
-  it('session-end with intelligence module consolidates', () => {
-    const result = runHandler('session-end');
-    expect(result.status).toBe(0);
-    // Output may contain intelligence consolidation or session ended
-    const out = result.stdout;
-    const hasEnded = out.includes('ended') || out.includes('Session') || out.includes('INTELLIGENCE');
-    expect(hasEnded || out.includes('[OK]')).toBe(true);
+    expect(result.stdout).toContain('[OK] Session ended');
   });
 });
 
-// ── Route and stats commands ────────────────────────────────────────────────
+// -- Dispatch table completeness ----------------------------------------------
 
-describe('hook-handler: route and stats commands', () => {
-  it('route command produces routing output', () => {
-    const result = runHandler('route');
-    expect(result.status).toBe(0);
-    const out = result.stdout;
-    // Should contain routing info or router not available
-    expect(out.includes('Routing') || out.includes('Router') || out.includes('[INFO]')).toBe(true);
-  });
-
-  it('stats without session warns about intelligence module', () => {
-    const result = runHandler('stats');
-    expect(result.status).toBe(0);
-    const out = result.stdout;
-    // May print stats or warn that intelligence module is not available
-    expect(out.length).toBeGreaterThan(0);
-  });
-
-  it('stats with --json flag', () => {
-    const result = runHandler('stats', null, {}, ['--json']);
-    expect(result.status).toBe(0);
-  });
-});
-
-// ── Dispatch table completeness ─────────────────────────────────────────────
-
-describe('hook-handler: dispatch table', () => {
+describe('enforcement: dispatch table', () => {
   const commands = [
-    'route', 'pre-bash', 'pre-edit', 'post-edit',
-    'session-restore', 'session-end', 'pre-task', 'post-task',
-    'compact-manual', 'compact-auto', 'status', 'stats',
+    'pre-command', 'pre-edit', 'pre-task', 'post-edit',
+    'post-task', 'session-end', 'session-restore',
+    'compact-manual', 'compact-auto',
+    'user-prompt', 'post-tool-failure', 'stop',
   ];
 
   for (const cmd of commands) {
@@ -315,11 +266,11 @@ describe('hook-handler: dispatch table', () => {
   }
 });
 
-// ── Edge cases ──────────────────────────────────────────────────────────────
+// -- Edge cases ---------------------------------------------------------------
 
-describe('hook-handler: edge cases', () => {
+describe('enforcement: edge cases', () => {
   it('getToolInput with nested tool_input object', () => {
-    const result = runHandler('pre-bash', {
+    const result = runHandler('pre-command', {
       tool_input: {
         command: 'git status',
         extra: 'ignored',
@@ -330,7 +281,7 @@ describe('hook-handler: edge cases', () => {
   });
 
   it('command from PROMPT env var', () => {
-    const result = runHandler('pre-bash', null, {
+    const result = runHandler('pre-command', null, {
       PROMPT: 'echo from env',
     });
     expect(result.status).toBe(0);
@@ -338,7 +289,7 @@ describe('hook-handler: edge cases', () => {
   });
 
   it('explicit task_id in stdin is respected', () => {
-    const tmpDir = resolve(tmpdir(), `hh-explicit-${Date.now()}`);
+    const tmpDir = resolve(tmpdir(), `enf-explicit-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(join(tmpDir, 'CLAUDE.md'), '# Test');
 

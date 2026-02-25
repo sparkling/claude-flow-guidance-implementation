@@ -565,7 +565,7 @@ console.log(runtime.getStatus());
 
 ---
 
-## EmbeddingProvider (GD-001)
+## EmbeddingProvider
 
 `import { createEmbeddingProvider } from 'claude-flow-guidance-implementation/embedding-provider'`
 
@@ -605,7 +605,7 @@ console.log(runtime.getStatus());
 
 ---
 
-## MemoryWriteGateHook (GD-002)
+## MemoryWriteGateHook
 
 `import { createMemoryWriteGateHook } from 'claude-flow-guidance-implementation/memory-write-gate'`
 

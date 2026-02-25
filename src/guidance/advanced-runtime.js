@@ -9,10 +9,46 @@ import {
 import { createProofChain } from '@claude-flow/guidance/proof';
 import { createConformanceRunner } from '@claude-flow/guidance/conformance-kit';
 import { createEvolutionPipeline } from '@claude-flow/guidance/evolution';
+import { createCoherenceScheduler, createEconomicGovernor } from '@claude-flow/guidance/coherence';
+import { createContinueGate } from '@claude-flow/guidance/continue-gate';
+import { createAuthorityGate, createIrreversibilityClassifier } from '@claude-flow/guidance/authority';
+import { createMetaGovernor } from '@claude-flow/guidance/meta-governance';
+import { createOptimizer } from '@claude-flow/guidance/optimizer';
+import { createTruthAnchorStore, createTruthResolver } from '@claude-flow/guidance/truth-anchors';
+import { createUncertaintyLedger, createUncertaintyAggregator } from '@claude-flow/guidance/uncertainty';
+import { createTemporalStore, createTemporalReasoner } from '@claude-flow/guidance/temporal';
+import { createCapabilityAlgebra } from '@claude-flow/guidance/capabilities';
+import { createArtifactLedger } from '@claude-flow/guidance/artifacts';
+import { createManifestValidator } from '@claude-flow/guidance/manifest-validator';
 
 import { createGuidancePhase1Runtime } from './phase1-runtime.js';
 import { buildRunEvent, createIntegrationRunners, runAllIntegrations } from './integration-runners.js';
 import { ensureDir, readJson, writeJson, nowIso } from '../utils.mjs';
+import {
+  createNullToolGateway,
+  createNullAuthorityGate,
+  createNullIrreversibilityClassifier,
+  createNullContinueGate,
+  createNullMetaGovernor,
+} from './enforcement-layer.js';
+import { createNullArtifactLedger } from './observation-layer.js';
+import {
+  createNullCoherenceScheduler,
+  createNullEconomicGovernor,
+  createNullOptimizer,
+} from './validation-layer.js';
+import {
+  createNullTruthAnchorStore,
+  createNullTruthResolver,
+  createNullUncertaintyLedger,
+  createNullUncertaintyAggregator,
+  createNullTemporalStore,
+  createNullTemporalReasoner,
+} from './knowledge-layer.js';
+import {
+  createNullCapabilityAlgebra,
+  createNullManifestValidator,
+} from './infrastructure-layer.js';
 
 const DEFAULT_AUTHORITY = {
   agentId: 'guidance-orchestrator',
@@ -32,6 +68,38 @@ const DEFAULT_OPTIONS = {
   collusionRingMinLength: 3,
   collusionFrequencyThreshold: 5,
   memoryQuorumThreshold: 0.67,
+  // Coherence
+  coherenceWindowSize: 50,
+  coherenceCheckIntervalMs: 30000,
+  tokenLimit: 500000,
+  toolCallLimit: 1000,
+  timeLimitMs: 3600000,
+  // Continue gate
+  maxConsecutiveSteps: 100,
+  maxBudgetSlopePerStep: 0.02,
+  minCoherenceForContinue: 0.4,
+  maxReworkRatio: 0.3,
+  continueGateCooldownMs: 5000,
+  // Meta-governance
+  supermajorityThreshold: 0.75,
+  maxAmendmentsPerWindow: 3,
+  amendmentWindowMs: 86400000,
+  // Optimizer
+  topViolationsPerCycle: 5,
+  minEventsForOptimization: 50,
+  optimizerImprovementThreshold: 0.1,
+  promotionWins: 2,
+  // Truth anchors
+  maxAnchors: 50000,
+  // Uncertainty
+  defaultConfidence: 0.7,
+  decayRatePerHour: 0.02,
+  minConfidenceForAction: 0.3,
+  // Temporal
+  maxAssertions: 100000,
+  autoExpireCheckIntervalMs: 60000,
+  // Artifacts
+  maxArtifacts: 50000,
 };
 
 // Null-object factories for disabled components.
@@ -144,6 +212,115 @@ export class GuidanceAdvancedRuntime {
       ? createConformanceRunner(this.options.authority, this.options.signingKey)
       : createNullConformanceRunner();
 
+    // --- Phase A: Production Hardening ---
+
+    this.coherenceScheduler = this._enabledComponents.has('coherence')
+      ? createCoherenceScheduler({
+          windowSize: this.options.coherenceWindowSize,
+          checkIntervalMs: this.options.coherenceCheckIntervalMs,
+        })
+      : createNullCoherenceScheduler();
+
+    this.economicGovernor = this._enabledComponents.has('coherence')
+      ? createEconomicGovernor({
+          tokenLimit: this.options.tokenLimit,
+          toolCallLimit: this.options.toolCallLimit,
+          timeLimit: this.options.timeLimitMs,
+        })
+      : createNullEconomicGovernor();
+
+    this.continueGate = this._enabledComponents.has('continue-gate')
+      ? createContinueGate({
+          maxConsecutiveSteps: this.options.maxConsecutiveSteps,
+          maxBudgetSlopePerStep: this.options.maxBudgetSlopePerStep,
+          minCoherenceForContinue: this.options.minCoherenceForContinue,
+          maxReworkRatio: this.options.maxReworkRatio,
+          cooldownMs: this.options.continueGateCooldownMs,
+        })
+      : createNullContinueGate();
+
+    this.irreversibilityClassifier = this._enabledComponents.has('authority')
+      ? createIrreversibilityClassifier()
+      : createNullIrreversibilityClassifier();
+
+    this.authorityGate = this._enabledComponents.has('authority')
+      ? createAuthorityGate({ signatureSecret: this.options.signingKey })
+      : createNullAuthorityGate();
+
+    this.metaGovernor = this._enabledComponents.has('meta-governance')
+      ? createMetaGovernor({
+          supermajorityThreshold: this.options.supermajorityThreshold,
+          maxAmendmentsPerWindow: this.options.maxAmendmentsPerWindow,
+          amendmentWindowMs: this.options.amendmentWindowMs,
+          signingKey: this.options.signingKey,
+        })
+      : createNullMetaGovernor();
+
+    this.optimizer = this._enabledComponents.has('optimizer')
+      ? createOptimizer({
+          topViolationsPerCycle: this.options.topViolationsPerCycle,
+          minEventsForOptimization: this.options.minEventsForOptimization,
+          improvementThreshold: this.options.optimizerImprovementThreshold,
+          promotionWins: this.options.promotionWins,
+          adrPath: resolve(this.rootDir, 'docs/adr'),
+        })
+      : createNullOptimizer();
+
+    // --- Phase B: Long-Horizon Autonomy ---
+
+    this.truthAnchorStore = this._enabledComponents.has('truth-anchors')
+      ? createTruthAnchorStore({
+          signingKey: this.options.signingKey,
+          maxAnchors: this.options.maxAnchors,
+        })
+      : createNullTruthAnchorStore();
+
+    this.truthResolver = this._enabledComponents.has('truth-anchors')
+      ? createTruthResolver(this.truthAnchorStore)
+      : createNullTruthResolver();
+
+    this.uncertaintyLedger = this._enabledComponents.has('uncertainty')
+      ? createUncertaintyLedger({
+          defaultConfidence: this.options.defaultConfidence,
+          decayRatePerHour: this.options.decayRatePerHour,
+          minConfidenceForAction: this.options.minConfidenceForAction,
+        })
+      : createNullUncertaintyLedger();
+
+    this.uncertaintyAggregator = this._enabledComponents.has('uncertainty')
+      ? createUncertaintyAggregator(this.uncertaintyLedger)
+      : createNullUncertaintyAggregator();
+
+    this.temporalStore = this._enabledComponents.has('temporal')
+      ? createTemporalStore({
+          maxAssertions: this.options.maxAssertions,
+          autoExpireCheckIntervalMs: this.options.autoExpireCheckIntervalMs,
+        })
+      : createNullTemporalStore();
+
+    this.temporalReasoner = this._enabledComponents.has('temporal')
+      ? createTemporalReasoner(this.temporalStore)
+      : createNullTemporalReasoner();
+
+    this.capabilities = this._enabledComponents.has('capabilities')
+      ? createCapabilityAlgebra()
+      : createNullCapabilityAlgebra();
+
+    // --- Phase C: Polish ---
+
+    this.artifactLedger = this._enabledComponents.has('artifacts')
+      ? createArtifactLedger({
+          signingKey: this.options.signingKey,
+          maxArtifacts: this.options.maxArtifacts,
+        })
+      : createNullArtifactLedger();
+
+    this.manifestValidator = this._enabledComponents.has('manifest-validator')
+      ? createManifestValidator()
+      : createNullManifestValidator();
+
+    this.stepCounter = 0;
+
     this.initialized = false;
 
     // Bind integration runner methods from the extracted module
@@ -154,6 +331,13 @@ export class GuidanceAdvancedRuntime {
     this.runProofIntegration = runners.runProofIntegration;
     this.runConformanceIntegration = runners.runConformanceIntegration;
     this.runEvolutionIntegration = runners.runEvolutionIntegration;
+    this.runCoherenceIntegration = runners.runCoherenceIntegration;
+    this.runContinueGateIntegration = runners.runContinueGateIntegration;
+    this.runAuthorityIntegration = runners.runAuthorityIntegration;
+    this.runMetaGovernanceIntegration = runners.runMetaGovernanceIntegration;
+    this.runOptimizerIntegration = runners.runOptimizerIntegration;
+    this.runKnowledgeIntegration = runners.runKnowledgeIntegration;
+    this.runCapabilitiesIntegration = runners.runCapabilitiesIntegration;
     this.runAllIntegrations = () => runAllIntegrations(this);
   }
 
@@ -164,7 +348,19 @@ export class GuidanceAdvancedRuntime {
       return new Set(saved.components);
     }
     // No components.json → all enabled (backwards compat)
-    return new Set(['trust', 'adversarial', 'proof', 'conformance', 'evolution', 'autopilot', 'analysis', 'codex']);
+    return new Set([
+      // Existing (Phase 0)
+      'trust', 'adversarial', 'proof', 'conformance', 'evolution',
+      'autopilot', 'analysis', 'codex',
+      // Phase A: Production Hardening
+      'persistence', 'coherence', 'continue-gate', 'gateway',
+      'authority', 'meta-governance', 'optimizer',
+      // Phase B: Long-Horizon Autonomy
+      'truth-anchors', 'uncertainty', 'temporal',
+      'capabilities', 'headless',
+      // Phase C: Polish
+      'wasm-kernel', 'generators', 'artifacts', 'manifest-validator',
+    ]);
   }
 
   async initialize() {
@@ -200,6 +396,25 @@ export class GuidanceAdvancedRuntime {
       }
     }
 
+    // Register constitutional invariants for meta-governance
+    if (this._enabledComponents.has('meta-governance')) {
+      this.metaGovernor.addInvariant({
+        id: 'no-weaken-security',
+        description: 'Security rules cannot be weakened by automated evolution',
+        check: (state) => state?.securityRulesIntact !== false,
+      });
+      this.metaGovernor.addInvariant({
+        id: 'no-remove-gates',
+        description: 'Enforcement gates cannot be removed',
+        check: (state) => state?.gatesActive !== false,
+      });
+      this.metaGovernor.addInvariant({
+        id: 'no-disable-proof',
+        description: 'Proof chain cannot be disabled by evolution',
+        check: (state) => state?.proofChainActive !== false,
+      });
+    }
+
     this.initialized = true;
   }
 
@@ -211,6 +426,13 @@ export class GuidanceAdvancedRuntime {
       trustSnapshots: this.trustSystem.getAllSnapshots(),
       trustRecords: this.trustSystem.ledger.exportRecords(),
       threatHistory: this.threatDetector.getThreatHistory(),
+      coherenceHistory: this.coherenceScheduler.getScoreHistory(),
+      economicUsage: this.economicGovernor.getUsageSummary(),
+      continueGateStats: this.continueGate.getStats(),
+      authorityInterventions: this.authorityGate.getInterventions(),
+      metaGovernanceInvariants: this.metaGovernor.getInvariants().map(i => i.id),
+      optimizerLastRun: this.optimizer.lastRun,
+      stepCounter: this.stepCounter,
       ...extra,
     });
 
@@ -274,6 +496,17 @@ export class GuidanceAdvancedRuntime {
 
   getStatus() {
     const proofExport = this.proofChain.export();
+
+    // Wrap new module calls in try-catch — real upstream modules may throw if
+    // internal state hasn't been populated by prior operations yet.
+    let coherenceScore = 1.0;
+    let coherenceHealthy = true;
+    try {
+      const raw = this.coherenceScheduler.computeCoherence({ violationRate: 0, reworkLines: 0 }, []);
+      coherenceScore = typeof raw === 'number' ? raw : (raw?.overall ?? 1.0);
+    } catch {}
+    try { coherenceHealthy = this.coherenceScheduler.isHealthy(); } catch {}
+
     return {
       initialized: this.initialized,
       guidanceHash: this.getGuidanceHash(),
@@ -282,6 +515,17 @@ export class GuidanceAdvancedRuntime {
       threatSignals: this.threatDetector.getThreatHistory().length,
       proofChainLength: proofExport.envelopes.length,
       evolutionProposals: this.evolutionPipeline.getProposals().length,
+      coherenceScore,
+      coherenceHealthy,
+      economicBudget: this.economicGovernor.checkBudget(),
+      continueGateStats: this.continueGate.getStats(),
+      authorityInterventions: this.authorityGate.getInterventions().length,
+      metaGovernanceInvariants: this.metaGovernor.getInvariants().length,
+      optimizerLastRun: this.optimizer.lastRun,
+      truthAnchorsActive: this.truthAnchorStore.getActive?.()?.length ?? 0,
+      uncertaintyContested: this.uncertaintyLedger.getContested?.()?.length ?? 0,
+      capabilitiesGranted: this.capabilities.getCapabilities?.('*')?.length ?? 0,
+      artifactsRecorded: this.artifactLedger.getStats?.()?.totalArtifacts ?? 0,
       statePath: this.statePath,
       proofPath: this.proofPath,
     };

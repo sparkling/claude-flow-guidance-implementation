@@ -1,0 +1,662 @@
+@prefix gcfg: <urn:claude-flow:guidance:> .
+@prefix mod:  <urn:claude-flow:guidance:module:> .
+@prefix wrap: <urn:claude-flow:wrapper:> .
+@prefix cp:   <urn:claude-flow:guidance:control-plane:> .
+@prefix hook: <urn:claude-flow:guidance:hooks:> .
+@prefix fact: <urn:claude-flow:guidance:factory:> .
+@prefix cls:  <urn:claude-flow:guidance:class:> .
+@prefix meth: <urn:claude-flow:guidance:method:> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+# ============================================================================
+# ONTOLOGY: Call Hierarchy for @claude-flow/guidance and our wrapper
+# ============================================================================
+#
+# This document traces the actual call hierarchy of the upstream
+# @claude-flow/guidance package (32 modules) and our wrapper
+# @sparkleideas/claude-flow-guidance, based on source-level analysis.
+#
+# Source: github.com/ruvnet/claude-flow/tree/main/v3/@claude-flow/guidance/src
+# Wrapper: /home/claude/src/claude-flow-guidance-implementation/
+# Date: 2026-02-24
+# ============================================================================
+
+# --- Properties -----------------------------------------------------------
+
+gcfg:importsModule     rdfs:label "imports module" ;
+                       rdfs:comment "Subject imports the object module" .
+gcfg:instantiates      rdfs:label "instantiates" ;
+                       rdfs:comment "Subject creates an instance of object factory/class" .
+gcfg:calls             rdfs:label "calls method" ;
+                       rdfs:comment "Subject calls a method on object" .
+gcfg:composes          rdfs:label "composes" ;
+                       rdfs:comment "Subject holds an instance of object as internal field" .
+gcfg:acceptsInjected   rdfs:label "accepts injected" ;
+                       rdfs:comment "Subject receives object as constructor/factory parameter" .
+gcfg:upstreamPhase     rdfs:label "upstream adoption phase" ;
+                       rdfs:comment "Which upstream adoption phase this module belongs to" .
+gcfg:usedByWrapper     rdfs:label "used by wrapper" ;
+                       rdfs:comment "Whether our wrapper uses this module" .
+gcfg:usedInFile        rdfs:label "used in file" ;
+                       rdfs:comment "Which wrapper file uses this module" .
+gcfg:exports           rdfs:label "exports" ;
+                       rdfs:comment "Module exports this factory/class" .
+gcfg:standaloneUsable  rdfs:label "standalone usable" ;
+                       rdfs:comment "Can be used without GuidanceControlPlane" .
+
+# ============================================================================
+# UPSTREAM MODULES (32 total)
+# ============================================================================
+
+# --- Phase 1: "Required for immediate value" (6 modules) ---
+
+mod:compiler a gcfg:Module ;
+    rdfs:label "compiler.ts" ;
+    rdfs:comment "CLAUDE.md -> PolicyBundle (constitution + shards + manifest)" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports fact:createCompiler ;
+    gcfg:exports cls:GuidanceCompiler ;
+    gcfg:standaloneUsable false ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:phase1Runtime, wrap:guidanceAutopilot .
+
+mod:retriever a gcfg:Module ;
+    rdfs:label "retriever.ts" ;
+    rdfs:comment "Intent-based shard selection with semantic similarity" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports fact:createRetriever ;
+    gcfg:exports cls:ShardRetriever, cls:HashEmbeddingProvider ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:phase1Runtime .
+
+mod:gateway a gcfg:Module ;
+    rdfs:label "gateway.ts" ;
+    rdfs:comment "Idempotency cache, schema validation, budget metering" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports fact:createToolGateway ;
+    gcfg:exports cls:DeterministicToolGateway ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:continueGate a gcfg:Module ;
+    rdfs:label "continue-gate.ts" ;
+    rdfs:comment "Step-level loop control, runaway prevention" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports cls:ContinueGate ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:persistence a gcfg:Module ;
+    rdfs:label "persistence.ts" ;
+    rdfs:comment "NDJSON append-only event store with compaction" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports fact:createPersistentLedger, fact:createEventStore ;
+    gcfg:exports cls:PersistentLedger, cls:EventStore ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:proof a gcfg:Module ;
+    rdfs:label "proof.ts" ;
+    rdfs:comment "HMAC-SHA256 hash-chained envelopes for audit trail" ;
+    gcfg:upstreamPhase "phase-1" ;
+    gcfg:exports fact:createProofChain ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:advancedRuntime, wrap:integrationRunners .
+
+# --- Phase 2: "Memory safety" (5 modules) ---
+
+mod:memoryGate a gcfg:Module ;
+    rdfs:label "memory-gate.ts" ;
+    rdfs:comment "Authority + rate limits + contradiction detection for memory writes" ;
+    gcfg:upstreamPhase "phase-2" ;
+    gcfg:exports fact:createMemoryWriteGate, fact:createMemoryEntry ;
+    gcfg:exports cls:MemoryWriteGate ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:memoryWriteGate .
+
+mod:temporal a gcfg:Module ;
+    rdfs:label "temporal.ts" ;
+    rdfs:comment "Bitemporal assertions with validity windows" ;
+    gcfg:upstreamPhase "phase-2" ;
+    gcfg:exports cls:TemporalStore, cls:TemporalReasoner ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:uncertainty a gcfg:Module ;
+    rdfs:label "uncertainty.ts" ;
+    rdfs:comment "First-class confidence tracking with evidence chains" ;
+    gcfg:upstreamPhase "phase-2" ;
+    gcfg:exports cls:UncertaintyLedger ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:trust a gcfg:Module ;
+    rdfs:label "trust.ts" ;
+    rdfs:comment "Per-agent 0.0-1.0 scoring with decay and 4 tiers" ;
+    gcfg:upstreamPhase "phase-2" ;
+    gcfg:exports fact:createTrustSystem ;
+    gcfg:exports cls:TrustSystem, cls:TrustAccumulator ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:advancedRuntime .
+
+mod:conformanceKit a gcfg:Module ;
+    rdfs:label "conformance-kit.ts" ;
+    rdfs:comment "Manifest validation and CI checks" ;
+    gcfg:upstreamPhase "phase-2" ;
+    gcfg:exports fact:createConformanceRunner ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:advancedRuntime .
+
+# --- Phase 3: "Regulated readiness" (3 modules) ---
+
+mod:authority a gcfg:Module ;
+    rdfs:label "authority.ts" ;
+    rdfs:comment "Scope-based auth boundaries, irreversibility classifier" ;
+    gcfg:upstreamPhase "phase-3" ;
+    gcfg:exports cls:AuthorityGate, cls:IrreversibilityClassifier ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:adversarial a gcfg:Module ;
+    rdfs:label "adversarial.ts" ;
+    rdfs:comment "Injection detection, collusion rings, memory quorum voting" ;
+    gcfg:upstreamPhase "phase-3" ;
+    gcfg:exports fact:createThreatDetector, fact:createCollusionDetector, fact:createMemoryQuorum ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:advancedRuntime .
+
+mod:metaGovernance a gcfg:Module ;
+    rdfs:label "meta-governance.ts" ;
+    rdfs:comment "Constitutional invariants, amendment supermajority" ;
+    gcfg:upstreamPhase "phase-3" ;
+    gcfg:exports fact:createMetaGovernor ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+# --- Tooling modules (not in adoption phases) ---
+
+mod:gates a gcfg:Module ;
+    rdfs:label "gates.ts" ;
+    rdfs:comment "Evaluate commands/tools/edits against active rules" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createGates ;
+    gcfg:exports cls:EnforcementGates ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:phase1Runtime .
+
+mod:hooks a gcfg:Module ;
+    rdfs:label "hooks.ts" ;
+    rdfs:comment "5 Claude Code hook registrations (pre-command, pre-tool, etc.)" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createGuidanceHooks ;
+    gcfg:exports cls:GuidanceHookProvider ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:phase1Runtime .
+
+mod:ledger a gcfg:Module ;
+    rdfs:label "ledger.ts" ;
+    rdfs:comment "In-memory run event tracking and violation recording" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createLedger ;
+    gcfg:exports cls:RunLedger ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:phase1Runtime .
+
+mod:evolution a gcfg:Module ;
+    rdfs:label "evolution.ts" ;
+    rdfs:comment "propose -> simulate -> canary -> rollout -> promote/rollback" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createEvolutionPipeline ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:advancedRuntime .
+
+mod:optimizer a gcfg:Module ;
+    rdfs:label "optimizer.ts" ;
+    rdfs:comment "Rule promotion cycle after 10+ events" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createOptimizer ;
+    gcfg:exports cls:OptimizerLoop ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:headless a gcfg:Module ;
+    rdfs:label "headless.ts" ;
+    rdfs:comment "Automated compliance testing via claude -p" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createHeadlessRunner ;
+    gcfg:exports cls:HeadlessRunner ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:wasmKernel a gcfg:Module ;
+    rdfs:label "wasm-kernel.ts" ;
+    rdfs:comment "1.8x faster SHA-256, HMAC, secret scanning via Rust WASM" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:getKernel, fact:isWasmAvailable ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:generators a gcfg:Module ;
+    rdfs:label "generators.ts" ;
+    rdfs:comment "CLAUDE.md scaffolding, scoring, project profiles" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:generateClaudeMd, fact:scaffold ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:analyzer a gcfg:Module ;
+    rdfs:label "analyzer.ts" ;
+    rdfs:comment "6-dimension scoring, A/B benchmarking, headless validation" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:analyze, fact:benchmark, fact:autoOptimize, fact:abBenchmark ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper true ;
+    gcfg:usedInFile wrap:guidanceAutopilot .
+
+mod:capabilities a gcfg:Module ;
+    rdfs:label "capabilities.ts" ;
+    rdfs:comment "Typed permission management (grant/restrict/delegate/expire/revoke)" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports cls:CapabilityAlgebra ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:coherence a gcfg:Module ;
+    rdfs:label "coherence.ts" ;
+    rdfs:comment "Coherence scoring + economic budget governor" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createCoherenceScheduler, fact:createEconomicGovernor ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:manifestValidator a gcfg:Module ;
+    rdfs:label "manifest-validator.ts" ;
+    rdfs:comment "Agent manifest validation, fails-closed admission" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports cls:ManifestValidator ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:artifacts a gcfg:Module ;
+    rdfs:label "artifacts.ts" ;
+    rdfs:comment "Artifact tracking ledger" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports cls:ArtifactLedger ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:truthAnchors a gcfg:Module ;
+    rdfs:label "truth-anchors.ts" ;
+    rdfs:comment "Immutable external facts, conflict resolution vs memory" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports fact:createTruthAnchorStore, fact:createTruthResolver ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:ruvbotIntegration a gcfg:Module ;
+    rdfs:label "ruvbot-integration.ts" ;
+    rdfs:comment "Agent runtime bridge for RuvBot" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:exports cls:RuvBotGuidanceBridge ;
+    gcfg:standaloneUsable true ;
+    gcfg:usedByWrapper false .
+
+mod:types a gcfg:Module ;
+    rdfs:label "types.ts" ;
+    rdfs:comment "Shared TypeScript type definitions" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:standaloneUsable false ;
+    gcfg:usedByWrapper true ;
+    skos:note "Implicitly used via TypeScript type imports" .
+
+mod:cryptoUtils a gcfg:Module ;
+    rdfs:label "crypto-utils.ts" ;
+    rdfs:comment "Internal crypto helper functions" ;
+    gcfg:upstreamPhase "tooling" ;
+    gcfg:standaloneUsable false ;
+    gcfg:usedByWrapper false .
+
+# ============================================================================
+# UPSTREAM AGGREGATION: GuidanceControlPlane
+# ============================================================================
+
+cp:GuidanceControlPlane a gcfg:Aggregator ;
+    rdfs:label "GuidanceControlPlane" ;
+    rdfs:comment """Top-level facade. Composes 6 subsystems in constructor.
+    Does NOT include: trust, proof, adversarial, conformance, evolution,
+    authority, temporal, uncertainty, gateway, continue-gate, persistence,
+    meta-governance, coherence, capabilities, wasm-kernel, generators,
+    analyzer, hooks, memory-gate, artifacts, truth-anchors, ruvbot.""" ;
+    gcfg:composes mod:compiler ;
+    gcfg:composes mod:retriever ;
+    gcfg:composes mod:gates ;
+    gcfg:composes mod:ledger ;
+    gcfg:composes mod:optimizer ;
+    gcfg:composes mod:headless .
+
+# --- ControlPlane constructor calls ---
+cp:GuidanceControlPlane gcfg:instantiates fact:createCompiler ;
+    gcfg:instantiates fact:createRetriever ;
+    gcfg:instantiates fact:createGates ;
+    gcfg:instantiates fact:createLedger ;
+    gcfg:instantiates fact:createOptimizer .
+
+# --- ControlPlane.initialize() call chain ---
+meth:cpInitialize a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.initialize()" ;
+    gcfg:calls meth:compilerCompile ;
+    gcfg:calls meth:retrieverLoadBundle ;
+    gcfg:calls meth:gatesSetActiveRules .
+
+meth:cpRetrieveForTask a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.retrieveForTask()" ;
+    gcfg:calls meth:retrieverRetrieve .
+
+meth:cpEvaluateCommand a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.evaluateCommand()" ;
+    gcfg:calls meth:gatesEvaluateCommand .
+
+meth:cpOptimize a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.optimize()" ;
+    gcfg:calls meth:optimizerRunCycle ;
+    gcfg:calls meth:retrieverLoadBundle ;
+    skos:note "Only runs if ledger has 10+ events" .
+
+meth:cpStartRun a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.startRun()" ;
+    gcfg:calls meth:ledgerCreateEvent .
+
+meth:cpFinalizeRun a gcfg:Method ;
+    rdfs:label "GuidanceControlPlane.finalizeRun()" ;
+    gcfg:calls meth:ledgerFinalizeEvent ;
+    gcfg:calls meth:ledgerEvaluate .
+
+# ============================================================================
+# UPSTREAM AGGREGATION: createGuidanceHooks()
+# ============================================================================
+
+hook:createGuidanceHooks a gcfg:Aggregator ;
+    rdfs:label "createGuidanceHooks()" ;
+    rdfs:comment """Hook integration layer. Does NOT create a ControlPlane.
+    Accepts 3 pre-instantiated components as parameters and wires them
+    into 5 Claude Code hook points.""" ;
+    gcfg:acceptsInjected mod:gates ;
+    gcfg:acceptsInjected mod:retriever ;
+    gcfg:acceptsInjected mod:ledger .
+
+# --- Hook registrations and what they call ---
+hook:preCommand a gcfg:Hook ;
+    rdfs:label "preCommand hook" ;
+    gcfg:calls meth:gatesEvaluateCommand .
+
+hook:preToolUse a gcfg:Hook ;
+    rdfs:label "preToolUse hook" ;
+    gcfg:calls meth:gatesEvaluateToolUse .
+
+hook:preEdit a gcfg:Hook ;
+    rdfs:label "preEdit hook" ;
+    gcfg:calls meth:gatesEvaluateEdit .
+
+hook:preTask a gcfg:Hook ;
+    rdfs:label "preTask hook" ;
+    gcfg:calls meth:retrieverRetrieve .
+
+hook:postTask a gcfg:Hook ;
+    rdfs:label "postTask hook" ;
+    gcfg:calls meth:ledgerLogEvent ;
+    gcfg:calls meth:ledgerEvaluate ;
+    gcfg:calls meth:ledgerFinalizeEvent .
+
+# ============================================================================
+# UPSTREAM: DeterministicToolGateway internal calls
+# ============================================================================
+
+cls:DeterministicToolGateway a gcfg:Class ;
+    rdfs:label "DeterministicToolGateway" ;
+    rdfs:comment "Wraps EnforcementGates + adds idempotency cache + schema + budget" ;
+    gcfg:composes mod:gates ;
+    gcfg:calls meth:gatesEvaluateToolUse .
+
+# ============================================================================
+# UPSTREAM: OptimizerLoop internal calls
+# ============================================================================
+
+cls:OptimizerLoop a gcfg:Class ;
+    rdfs:label "OptimizerLoop" ;
+    rdfs:comment "Rule promotion cycle. Reads from ledger." ;
+    gcfg:calls meth:ledgerRankViolations ;
+    gcfg:calls meth:ledgerComputeMetrics .
+
+# ============================================================================
+# UPSTREAM: HeadlessRunner internal calls
+# ============================================================================
+
+cls:HeadlessRunner a gcfg:Class ;
+    rdfs:label "HeadlessRunner" ;
+    rdfs:comment "Automated compliance testing. Optionally uses ledger." ;
+    gcfg:calls meth:ledgerCreateEvent ;
+    gcfg:calls meth:ledgerLogEvent ;
+    gcfg:calls meth:ledgerEvaluate ;
+    gcfg:calls meth:ledgerFinalizeEvent .
+
+# ============================================================================
+# UPSTREAM METHOD REFERENCES (targets of gcfg:calls)
+# ============================================================================
+
+meth:compilerCompile a gcfg:Method ; rdfs:label "compiler.compile()" .
+meth:retrieverLoadBundle a gcfg:Method ; rdfs:label "retriever.loadBundle()" .
+meth:retrieverRetrieve a gcfg:Method ; rdfs:label "retriever.retrieve()" .
+meth:gatesSetActiveRules a gcfg:Method ; rdfs:label "gates.setActiveRules()" .
+meth:gatesEvaluateCommand a gcfg:Method ; rdfs:label "gates.evaluateCommand()" .
+meth:gatesEvaluateToolUse a gcfg:Method ; rdfs:label "gates.evaluateToolUse()" .
+meth:gatesEvaluateEdit a gcfg:Method ; rdfs:label "gates.evaluateEdit()" .
+meth:ledgerCreateEvent a gcfg:Method ; rdfs:label "ledger.createEvent()" .
+meth:ledgerLogEvent a gcfg:Method ; rdfs:label "ledger.logEvent()" .
+meth:ledgerFinalizeEvent a gcfg:Method ; rdfs:label "ledger.finalizeEvent()" .
+meth:ledgerEvaluate a gcfg:Method ; rdfs:label "ledger.evaluate()" .
+meth:ledgerRankViolations a gcfg:Method ; rdfs:label "ledger.rankViolations()" .
+meth:ledgerComputeMetrics a gcfg:Method ; rdfs:label "ledger.computeMetrics()" .
+meth:optimizerRunCycle a gcfg:Method ; rdfs:label "optimizer.runCycle()" .
+
+# ============================================================================
+# OUR WRAPPER: Files and their upstream usage
+# ============================================================================
+
+wrap:phase1Runtime a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/phase1-runtime.js" ;
+    rdfs:comment """Creates GuidancePhase1Runtime. Instantiates 5 upstream factories
+    in constructor, then wires them via createGuidanceHooks() in initialize().""" ;
+    gcfg:instantiates fact:createCompiler ;
+    gcfg:instantiates fact:createRetriever ;
+    gcfg:instantiates fact:createGates ;
+    gcfg:instantiates fact:createLedger ;
+    gcfg:instantiates fact:createGuidanceHooks ;
+    gcfg:importsModule mod:compiler ;
+    gcfg:importsModule mod:retriever ;
+    gcfg:importsModule mod:gates ;
+    gcfg:importsModule mod:ledger ;
+    gcfg:importsModule mod:hooks .
+
+wrap:advancedRuntime a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/advanced-runtime.js" ;
+    rdfs:comment """Creates GuidanceAdvancedRuntime. Composes phase1Runtime +
+    6 additional upstream subsystems (conditionally, with null-object stubs).""" ;
+    gcfg:composes wrap:phase1Runtime ;
+    gcfg:instantiates fact:createTrustSystem ;
+    gcfg:instantiates fact:createThreatDetector ;
+    gcfg:instantiates fact:createCollusionDetector ;
+    gcfg:instantiates fact:createMemoryQuorum ;
+    gcfg:instantiates fact:createProofChain ;
+    gcfg:instantiates fact:createConformanceRunner ;
+    gcfg:instantiates fact:createEvolutionPipeline ;
+    gcfg:importsModule mod:trust ;
+    gcfg:importsModule mod:adversarial ;
+    gcfg:importsModule mod:proof ;
+    gcfg:importsModule mod:conformanceKit ;
+    gcfg:importsModule mod:evolution .
+
+wrap:memoryWriteGate a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/memory-write-gate.js" ;
+    rdfs:comment """Wraps upstream MemoryWriteGate and adds semantic contradiction
+    detection via cosine similarity on embeddings.""" ;
+    gcfg:instantiates fact:createMemoryWriteGate ;
+    gcfg:instantiates fact:createMemoryEntry ;
+    gcfg:importsModule mod:memoryGate ;
+    gcfg:composes wrap:embeddingProvider .
+
+wrap:embeddingProvider a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/embedding-provider.js" ;
+    rdfs:comment """Custom IEmbeddingProvider. Hash-based (deterministic, test) or
+    AgentDB-backed (production). Does NOT import any upstream guidance module.""" ;
+    skos:note "Zero upstream guidance imports. Uses agentdb optionally." .
+
+wrap:enforcement a gcfg:WrapperFile ;
+    rdfs:label "src/enforcement.cjs" ;
+    rdfs:comment """Claude Code hook handler. Reads stdin JSON, dispatches to
+    guidance-integrations.js via subprocess. Does NOT import any upstream
+    guidance module directly.""" ;
+    skos:note "Zero upstream guidance imports. Spawns subprocesses." .
+
+wrap:integrationRunners a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/integration-runners.js" ;
+    rdfs:comment """Integration test suites exercising the full runtime stack.
+    6 runners: hooks, trust, adversarial, proof, conformance, evolution.""" ;
+    gcfg:instantiates fact:createProofChain ;
+    gcfg:importsModule mod:proof .
+
+wrap:guidanceAutopilot a gcfg:WrapperFile ;
+    rdfs:label "scripts/guidance-autopilot.js" ;
+    rdfs:comment """Autonomous rule promotion pipeline. Analyzes CLAUDE.md,
+    runs A/B benchmarks, promotes winning local rules.""" ;
+    gcfg:instantiates fact:createCompiler ;
+    gcfg:instantiates fact:analyze ;
+    gcfg:instantiates fact:benchmark ;
+    gcfg:instantiates fact:abBenchmark ;
+    gcfg:importsModule mod:analyzer ;
+    gcfg:importsModule mod:compiler .
+
+wrap:codexBridge a gcfg:WrapperFile ;
+    rdfs:label "scripts/guidance-codex-bridge.js" ;
+    rdfs:comment """HTTP/CLI bridge. Spawns enforcement.cjs and optionally
+    npx @claude-flow/cli hooks. Zero upstream guidance imports.""" ;
+    skos:note "Zero upstream guidance imports. Spawns subprocesses." .
+
+wrap:contentAwareExecutor a gcfg:WrapperFile ;
+    rdfs:label "src/guidance/content-aware-executor.js" ;
+    rdfs:comment """Synthetic executor for A/B benchmarking. Produces behavior
+    differences based on CLAUDE.md content without calling real Claude.""" ;
+    skos:note "Zero upstream guidance imports." .
+
+# ============================================================================
+# TRANSITIVE CALL ANALYSIS
+# ============================================================================
+#
+# Q: What upstream modules does our wrapper TRANSITIVELY invoke?
+#
+# Starting from our entry points and following all call chains:
+#
+# wrap:advancedRuntime
+#   -> (composes) wrap:phase1Runtime
+#     -> (instantiates) createCompiler, createRetriever, createGates, createLedger
+#     -> (instantiates) createGuidanceHooks
+#       -> (internally calls) gates.evaluateCommand/ToolUse/Edit
+#       -> (internally calls) retriever.retrieve
+#       -> (internally calls) ledger.logEvent/evaluate/finalizeEvent
+#   -> (instantiates) createTrustSystem
+#   -> (instantiates) createThreatDetector, createCollusionDetector, createMemoryQuorum
+#   -> (instantiates) createProofChain
+#   -> (instantiates) createConformanceRunner
+#   -> (instantiates) createEvolutionPipeline
+#
+# wrap:memoryWriteGate
+#   -> (instantiates) createMemoryWriteGate
+#   -> (instantiates) createMemoryEntry
+#   -> (composes) embeddingProvider (no upstream guidance deps)
+#
+# wrap:guidanceAutopilot
+#   -> (instantiates) createCompiler
+#   -> (calls) analyze, benchmark, abBenchmark
+#
+# TOTAL UNIQUE UPSTREAM MODULES TRANSITIVELY REACHED: 12
+#   compiler, retriever, gates, ledger, hooks,
+#   trust, adversarial, proof, conformance-kit, evolution,
+#   memory-gate, analyzer
+#
+# NEVER REACHED (20 modules):
+#   gateway, continue-gate, persistence, temporal, uncertainty,
+#   authority, meta-governance, optimizer, headless, wasm-kernel,
+#   generators, capabilities, coherence, manifest-validator, artifacts,
+#   truth-anchors, ruvbot-integration, types (implicit), crypto-utils
+#
+# Q: What does GuidanceControlPlane TRANSITIVELY invoke?
+#
+# cp:GuidanceControlPlane
+#   -> (composes) compiler
+#   -> (composes) retriever
+#   -> (composes) gates
+#   -> (composes) ledger
+#   -> (composes) optimizer
+#     -> (calls) ledger.rankViolations, ledger.computeMetrics
+#   -> (composes) headless (optional)
+#     -> (calls) ledger.createEvent/logEvent/evaluate/finalizeEvent
+#
+# TOTAL UNIQUE UPSTREAM MODULES IN CONTROLPLANE: 6
+#   compiler, retriever, gates, ledger, optimizer, headless
+#
+# OVERLAP ANALYSIS (our wrapper vs ControlPlane):
+#
+#   Both use: compiler, retriever, gates, ledger  (4 modules)
+#   Only ControlPlane uses: optimizer, headless    (2 modules)
+#   Only our wrapper uses: hooks, trust, adversarial, proof,
+#     conformance-kit, evolution, memory-gate, analyzer  (8 modules)
+#
+# KEY INSIGHT: Neither ControlPlane NOR our wrapper uses:
+#   gateway, continue-gate, persistence, temporal, uncertainty,
+#   authority, meta-governance, capabilities, coherence,
+#   manifest-validator, artifacts, truth-anchors, wasm-kernel,
+#   generators, ruvbot-integration
+#   = 15 modules that are PURELY STANDALONE, used by NOBODY's aggregation
+#
+# The ControlPlane is NOT a super-aggregator that calls everything.
+# It only aggregates 6 of 32 modules. The other 26 are standalone.
+
+# ============================================================================
+# COVERAGE SUMMARY
+# ============================================================================
+
+gcfg:coverageSummary a gcfg:Analysis ;
+    rdfs:label "Module Coverage Summary" ;
+    gcfg:totalUpstreamModules "32"^^xsd:integer ;
+    gcfg:modulesUsedByWrapper "12"^^xsd:integer ;
+    gcfg:modulesInControlPlane "6"^^xsd:integer ;
+    gcfg:modulesUsedByBoth "4"^^xsd:integer ;
+    gcfg:modulesOnlyControlPlane "2"^^xsd:integer ;
+    gcfg:modulesOnlyWrapper "8"^^xsd:integer ;
+    gcfg:modulesUsedByNeither "15"^^xsd:integer ;
+    gcfg:modulesInternalOnly "3"^^xsd:integer ;
+    skos:note """Corrected count: 12 modules (not 11 as previously stated).
+    The autopilot script imports analyzer and compiler — analyzer was missed
+    in earlier analysis. types and crypto-utils are internal-only modules,
+    not meant to be directly consumed.
+
+    The 15 unused modules are all standalone — they are not reachable
+    through any aggregation layer. They must be individually instantiated
+    and wired into the runtime by the consumer. Neither GuidanceControlPlane
+    nor createGuidanceHooks() provides access to them.
+
+    This means the question 'should we use ControlPlane or individual modules'
+    is a false dichotomy. Even if we used ControlPlane, we would STILL need
+    to individually instantiate all the modules ControlPlane doesn't cover.
+    ControlPlane only handles 6 of 32 modules.""" .

@@ -1,759 +1,341 @@
-# Solutions Architecture: claude-flow-guidance-implementation
+# Architecture
 
-## 1. Executive Summary
+## System Overview
 
-The Guidance Implementation Kit is a turnkey integration layer that enforces `CLAUDE.md` policy rules on every tool use by AI coding agents. It sits between the agent runtime (Claude Code or OpenAI Codex) and the `@claude-flow/guidance` policy engine. When an agent is about to execute a command, edit a file, or spawn a task, the kit intercepts the event, evaluates it against compiled policy rules, and returns an allow or block decision within the agent's hook timeout window.
-
-The kit provides: a one-command installer (`cf-guidance-impl init`) that wires hooks into any repository; a CommonJS hook dispatcher that handles 12 lifecycle events; a two-tier policy runtime (lightweight gates plus enterprise security layers); and continuous policy optimisation via an autopilot that promotes high-performing local rules with full scoring and A/B benchmarking.
-
----
-
-## 2. Solution Architecture
-
-This diagram shows the complete system: agents on the left, the kit's processing layers in the centre, and external dependencies on the right.
-
-![Solution Architecture Overview](diagrams/architecture/solution-architecture-overview.svg)
-
-<details>
-<summary>Mermaid source</summary>
+This package is a **wrapper implementation** that bridges the upstream `@claude-flow/guidance` control plane into real Claude Code and Codex environments. It does not duplicate the upstream logic — it instantiates, configures, and wires the upstream modules through a layered runtime with null-object fallbacks for disabled components.
 
 ```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
-flowchart TB
-    accTitle: Solution Architecture Overview
-    accDescr: Shows agents, the hook dispatcher, guidance runtime, and external dependencies
-
-    classDef agent fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
-    classDef iface fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef core fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef data fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef security fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
-    classDef ext fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238
-
-    CC["Claude Code"]:::agent
-    CX["Codex"]:::agent
-    Dev["Developer"]:::agent
-
-    subgraph Kit["Guidance Implementation Kit"]
-        direction TB
-        Settings[".claude/settings.json<br/>Hook definitions + env vars"]:::iface
-        Bridge["guidance-codex-bridge.js<br/>CLI lifecycle adapter"]:::iface
-        Handler["hook-handler.cjs<br/>CJS dispatcher<br/>12 commands"]:::core
-        Helpers["Helper modules<br/>router / session / intelligence"]:::core
-
-        subgraph Runtime["Guidance Runtime"]
-            direction LR
-            P1["Phase 1<br/>Compiler + Retriever<br/>Gates + Ledger"]:::core
-            Adv["Advanced<br/>Trust + Threat<br/>Proof + Evolution"]:::security
-            EP["EmbeddingProvider<br/>Hash or AgentDB HNSW"]:::core
-            MWG["MemoryWriteGateHook<br/>Authority + Rate + Semantic"]:::security
-        end
-
-        CLI["8 CLI tools<br/>analyze / autopilot / benchmark<br/>integrations / scaffold / codex"]:::core
-        Installer["cf-guidance-impl<br/>init / install / verify"]:::core
+graph TB
+    subgraph "User Environment"
+        CC[Claude Code Session]
+        CX[OpenAI Codex]
+        CMD[CLAUDE.md + CLAUDE.local.md]
     end
 
-    subgraph State["Persistent State"]
-        direction LR
-        Policy["CLAUDE.md<br/>CLAUDE.local.md"]:::data
-        Store[".claude-flow/guidance/<br/>trust / proof / cache"]:::data
+    subgraph "This Package: @sparkleideas/claude-flow-guidance"
+        INS[Installer<br/>installer.mjs]
+        ENF[Enforcement Handler<br/>enforcement.cjs]
+        P1[Phase 1 Runtime<br/>phase1-runtime.js]
+        ADV[Advanced Runtime<br/>advanced-runtime.js]
+        MWG[Memory Write Gate<br/>memory-write-gate.js]
+        EP[Embedding Provider<br/>embedding-provider.js]
+        EH[Event Handlers<br/>event-handlers.js]
+        AP[Autopilot<br/>guidance-autopilot.js]
     end
 
-    subgraph Deps["External Packages"]
-        direction LR
-        GuidancePkg["@claude-flow/guidance<br/>Policy engine"]:::ext
-        HooksPkg["@claude-flow/hooks<br/>Hook registry"]:::ext
+    subgraph "Upstream: @claude-flow/guidance"
+        COMP[Compiler]
+        RET[Retriever]
+        GT[Gates]
+        TR[Trust System]
+        ADV_U[Adversarial Detection]
+        PR[Proof Chain]
+        EV[Evolution Pipeline]
+        COH[Coherence Scheduler]
+        AUTH[Authority Gate]
+        MG[Meta-Governance]
+        OPT[Optimizer]
+        TA[Truth Anchors]
+        UNC[Uncertainty Ledger]
+        TMP[Temporal Store]
+        CAP[Capabilities Algebra]
+        ART[Artifact Ledger]
+        MAN[Manifest Validator]
+        PER[Persistent Ledger]
+        GW[Tool Gateway]
+        CG[Continue Gate]
     end
 
-    CC -->|"stdin JSON<br/>+ hook command"| Settings
-    CX -->|"CLI commands"| Bridge
-    Dev -->|"cf-guidance-impl init"| Installer
+    subgraph "Upstream: @claude-flow/hooks"
+        HR[HookRegistry]
+        HE[HookExecutor]
+        HEV[HookEvent]
+    end
 
-    Settings --> Handler
-    Bridge --> Handler
-    Handler --> Helpers
-    Handler -->|"spawnSync<br/>(blocking)"| Runtime
-    P1 --> Adv
-
-    Runtime --> Policy
-    Runtime --> Store
-    Runtime --> GuidancePkg
-    Runtime --> HooksPkg
-
-    Installer -->|"writes shim"| Handler
-    Installer -->|"merges config"| Settings
-    CLI --> Runtime
-    EP -.->|"embeds shards"| P1
-    MWG -.->|"pre-write check"| Store
-    EP -.->|"semantic vectors"| MWG
+    CC -->|hooks| ENF
+    CX -->|bridge| ENF
+    INS -->|wires| CC
+    INS -->|wires| CX
+    ENF -->|dispatches| EH
+    EH -->|initialises| ADV
+    ADV -->|creates| P1
+    P1 -->|uses| COMP
+    P1 -->|uses| RET
+    P1 -->|uses| GT
+    P1 -->|uses| HR
+    P1 -->|uses| HE
+    P1 -->|uses| PER
+    P1 -->|uses| GW
+    ADV -->|uses| TR
+    ADV -->|uses| ADV_U
+    ADV -->|uses| PR
+    ADV -->|uses| EV
+    ADV -->|uses| COH
+    ADV -->|uses| AUTH
+    ADV -->|uses| MG
+    ADV -->|uses| OPT
+    ADV -->|uses| TA
+    ADV -->|uses| UNC
+    ADV -->|uses| TMP
+    ADV -->|uses| CAP
+    ADV -->|uses| ART
+    ADV -->|uses| MAN
+    ADV -->|uses| CG
+    MWG -->|wraps| EP
+    MWG -->|cosine similarity| EP
+    AP -->|analyses| CMD
+    AP -->|benchmarks| COMP
 ```
 
-</details>
+## Layered Architecture
 
----
-
-## 3. Integration Architecture
-
-The kit supports two integration paths. Claude Code has a native hook system; Codex does not. The bridge adapter normalises Codex events into the same format so both agents share identical policy enforcement.
-
-![Integration Paths](diagrams/architecture/integration-paths.svg)
-
-<details>
-<summary>Mermaid source</summary>
+The implementation follows a layered architecture where each layer wraps a set of upstream modules with null-object fallbacks:
 
 ```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
-flowchart LR
-    accTitle: Integration Paths
-    accDescr: Shows the two integration paths for Claude Code and Codex into the shared hook dispatcher
-
-    classDef agent fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
-    classDef hook fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef core fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef decision fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-
-    subgraph ClaudePath["Claude Code Path"]
-        direction TB
-        CC["Claude Code<br/>agent"]:::agent
-        CCHook["settings.json<br/>PreToolUse / PostToolUse<br/>SessionStart / SessionEnd"]:::hook
-        CC -->|"tool event<br/>stdin JSON"| CCHook
+graph LR
+    subgraph "Layer 5: Infrastructure"
+        L5A[Capabilities Algebra]
+        L5B[Manifest Validator]
+        L5C[Headless Runner]
+        L5D[WASM Kernel]
+        L5E[Generators]
     end
 
-    subgraph CodexPath["Codex Path"]
-        direction TB
-        CX["Codex<br/>agent"]:::agent
-        CXBridge["guidance-codex-bridge.js<br/>8 lifecycle commands"]:::hook
-        CX -->|"CLI invocation<br/>--command / --file / --description"| CXBridge
+    subgraph "Layer 4: Knowledge"
+        L4A[Truth Anchors + Resolver]
+        L4B[Uncertainty Ledger + Aggregator]
+        L4C[Temporal Store + Reasoner]
     end
 
-    Handler["hook-handler.cjs<br/>Unified dispatcher"]:::core
-
-    CCHook -->|"node hook-handler.cjs<br/>pre-bash / pre-edit / ..."| Handler
-    CXBridge -->|"spawnSync<br/>normalised stdin JSON"| Handler
-
-    subgraph Dispatch["Handler Dispatch"]
-        direction TB
-        Blocking["Blocking (sync)<br/>pre-bash / pre-edit / pre-task<br/>exit 0 = allow, exit 1 = block"]:::decision
-        Async["Fire-and-forget (async)<br/>post-edit / post-task / session-end<br/>detached child process"]:::core
-        Info["Informational<br/>route / status / stats / compact"]:::core
+    subgraph "Layer 3: Validation"
+        L3A[Coherence Scheduler]
+        L3B[Economic Governor]
+        L3C[Optimizer]
     end
 
-    Handler --> Blocking
-    Handler --> Async
-    Handler --> Info
+    subgraph "Layer 2: Enforcement"
+        L2A[Tool Gateway]
+        L2B[Authority Gate]
+        L2C[Continue Gate]
+        L2D[Meta-Governor]
+    end
+
+    subgraph "Layer 1: Core Pipeline"
+        L1A[Compiler]
+        L1B[Retriever]
+        L1C[Gates]
+        L1D[Ledger]
+        L1E[Hooks]
+    end
+
+    subgraph "Layer 0: Foundation"
+        L0A[Trust System]
+        L0B[Adversarial Detection]
+        L0C[Proof Chain]
+        L0D[Conformance Runner]
+        L0E[Evolution Pipeline]
+    end
+
+    L5A --> L4A
+    L4A --> L3A
+    L3A --> L2A
+    L2A --> L1A
+    L1A --> L0A
 ```
 
-</details>
+Each layer has a corresponding `*-layer.js` file that provides null-object factories:
 
-### Hook Event Mapping
+| Layer | File | Null Factories |
+|---|---|---|
+| Enforcement | `enforcement-layer.js` | Gateway, Authority, Continue Gate, Meta-Governor |
+| Observation | `observation-layer.js` | Persistent Ledger, Artifact Ledger |
+| Validation | `validation-layer.js` | Coherence Scheduler, Economic Governor, Optimizer |
+| Knowledge | `knowledge-layer.js` | Truth Anchors/Resolver, Uncertainty Ledger/Aggregator, Temporal Store/Reasoner |
+| Infrastructure | `infrastructure-layer.js` | Capability Algebra, Manifest Validator, Headless, WASM, Generators |
 
-| Claude Code Hook | Handler Command | Guidance Event | Sync | Can Block |
-|---|---|---|---|---|
-| `PreToolUse` Bash | `pre-bash` | `pre-command` | Yes | Yes |
-| `PreToolUse` Write/Edit/MultiEdit | `pre-edit` | `pre-edit` | Yes | Yes |
-| `PreToolUse` Task | `pre-task` | `pre-task` | Yes | Yes |
-| `PostToolUse` Write/Edit/MultiEdit | `post-edit` | `post-edit` | No | No |
-| `PostToolUse` Task | `post-task` | `post-task` | No | No |
-| `SessionStart` | `session-restore` | session init | No | No |
-| `SessionEnd` | `session-end` | session persist | No | No |
+## Hook Event Flow
 
----
-
-## 4. Request Flow: Blocking Hooks
-
-When Claude Code is about to execute a tool, it fires a `PreToolUse` event. The hook handler must return before the agent proceeds. Exit code 0 allows the operation; exit code 1 blocks it.
-
-![Blocking Hook Sequence](diagrams/architecture/blocking-hook-sequence.svg)
-
-<details>
-<summary>Mermaid source</summary>
+When Claude Code fires a hook event, this is the processing pipeline:
 
 ```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F",
-    "actorBkg": "#F3E5F5",
-    "actorBorder": "#7B1FA2",
-    "actorTextColor": "#4A148C"
-  }
-}}%%
 sequenceDiagram
-    accTitle: Blocking Hook Sequence
-    accDescr: Shows the synchronous flow of a pre-bash hook from Claude Code through policy gates to an allow or block decision
-
     participant CC as Claude Code
-    participant HH as hook-handler.cjs
-    participant GI as guidance-integrations.js
-    participant RT as Guidance Runtime
-    participant G as Gates
-
-    CC->>+HH: PreToolUse Bash<br/>stdin: {"tool_input":{"command":"rm -rf /"}}
-    Note over HH: Parse stdin JSON<br/>Extract command text
-
-    HH->>HH: Check hardcoded<br/>dangerous patterns
-    Note over HH: Match: rm -rf /
-
-    alt Dangerous pattern matched
-        HH-->>CC: exit 1 (BLOCK)
-    else No pattern match
-        HH->>+GI: spawnSync<br/>event pre-command {command}
-        GI->>+RT: initialize()
-        RT->>RT: Compile CLAUDE.md<br/>into policy bundle
-        RT-->>-GI: ready
-        GI->>+G: preCommand(command)
-        G->>G: Retrieve relevant shards<br/>Evaluate rules
-        G-->>-GI: {blocked: false, messages, warnings}
-        GI-->>-HH: JSON result
-        alt blocked: true
-            HH-->>CC: exit 1 (BLOCK)
-        else blocked: false
-            HH-->>-CC: exit 0 (ALLOW)
-        end
-    end
-```
-
-</details>
-
-The three blocking hooks (`pre-bash`, `pre-edit`, `pre-task`) all follow this pattern. Two layers of defence apply:
-
-1. **Hardcoded patterns** (hook handler) — regex checks for `rm -rf /`, `format c:`, `del /s /q c:\`, and fork bombs. Fast, zero-dependency, always-on.
-2. **Policy gates** (guidance runtime) — compiled CLAUDE.md rules evaluated against the specific operation. Configurable, auditable, evolvable.
-
-Timeout behaviour is configurable: `GUIDANCE_EVENT_SYNC_TIMEOUT_MS` (default 8000ms) controls how long the handler waits for the guidance runtime. `GUIDANCE_EVENT_FAIL_CLOSED=0` (default) means a timeout allows the operation rather than blocking it.
-
----
-
-## 5. Request Flow: Async Hooks
-
-Post-event hooks must not slow down the agent. They spawn detached child processes and return immediately.
-
-![Async Hook Sequence](diagrams/architecture/async-hook-sequence.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F",
-    "actorBkg": "#F3E5F5",
-    "actorBorder": "#7B1FA2",
-    "actorTextColor": "#4A148C"
-  }
-}}%%
-sequenceDiagram
-    accTitle: Async Hook Sequence
-    accDescr: Shows the fire-and-forget flow of post-task and session-end hooks
-
-    participant CC as Claude Code
-    participant HH as hook-handler.cjs
-    participant BG as Background Process
-    participant RT as Guidance Runtime
+    participant ENF as enforcement.cjs
+    participant EH as event-handlers.js
+    participant ADV as Advanced Runtime
+    participant P1 as Phase 1 Runtime
+    participant UP as Upstream Gates
+    participant TR as Trust System
+    participant PR as Proof Chain
     participant AP as Autopilot
 
-    CC->>+HH: PostToolUse Task<br/>stdin: {"tool_input":{"status":"completed"}}
-    Note over HH: Parse stdin<br/>Look up cached task context
+    CC->>ENF: Hook event (stdin JSON)
+    ENF->>ENF: Parse command + tool_input
+    ENF->>EH: runGuidanceEventSync(event, payload)
+    EH->>ADV: runtime.initialize()
+    ADV->>P1: phase1.initialize()
+    P1->>UP: compiler.compile(CLAUDE.md)
+    P1->>UP: retriever.loadBundle(bundle)
+    P1->>UP: gates.setActiveRules(rules)
 
-    HH->>BG: spawn(detached: true)<br/>event post-task {payload}
-    Note over HH: child.unref()<br/>Handler returns immediately
-    HH-->>-CC: exit 0 (always allows)
+    alt pre-command
+        EH->>P1: phase1.preCommand(command)
+        P1->>UP: gates.evaluate(command)
+        UP-->>P1: {success, aborted, warnings}
+        EH->>ADV: threatDetector.analyzeInput(command)
+        EH->>ADV: irreversibilityClassifier.classify(command)
+        EH->>ADV: authorityGate.canPerform(level, command)
+    end
 
-    activate BG
-    BG->>RT: Record trust outcome
-    BG->>RT: Append proof envelope
-    BG->>RT: Send intelligence feedback
-    deactivate BG
+    EH->>TR: recordTrust(agentId, outcome)
+    EH->>PR: appendProof({taskId, violations, ...})
+    EH->>ADV: persistState()
+    EH-->>ENF: {success, blocked, trust, proof}
 
-    Note over CC,AP: Later: SessionEnd event
+    alt blocked
+        ENF->>CC: exit(1) + BLOCKED message
+    else allowed
+        ENF->>CC: exit(0) + OK message
+    end
 
-    CC->>+HH: SessionEnd
-    HH->>BG: spawn(detached: true)<br/>event session-end
-    HH->>AP: spawn(detached: true)<br/>autopilot --once
-    Note over HH: Both detached, handler exits
-    HH-->>-CC: exit 0
-
-    activate BG
-    BG->>RT: Consolidate intelligence<br/>PageRank recomputation
-    BG->>RT: Run conformance check
-    BG->>RT: Trigger evolution pipeline
-    deactivate BG
-
-    activate AP
-    AP->>AP: Find promotable local rules<br/>Score and benchmark<br/>Apply or propose
-    deactivate AP
+    alt session-end
+        EH->>ADV: runConformanceIntegration()
+        EH->>ADV: runEvolutionIntegration()
+        EH->>ADV: optimizer.runCycle()
+        EH->>ADV: metaGovernor.validateOptimizerAction()
+        ENF->>AP: launchGuidanceAutopilot(source)
+    end
 ```
 
-</details>
+## Installer Flow
 
----
-
-## 6. Policy Compilation Pipeline
-
-All policy rules originate from Markdown files. The compiler transforms them into structured, enforceable gates.
-
-![Policy Pipeline](diagrams/architecture/policy-pipeline.svg)
-
-<details>
-<summary>Mermaid source</summary>
+The installer wires guidance into both Claude Code and Codex environments:
 
 ```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
+flowchart TD
+    START([cf-guidance init]) --> RESOLVE[Resolve components<br/>preset/selection/exclusion]
+    RESOLVE --> ENV[Build env overrides<br/>from CLI flags]
+    ENV --> DRY{Dry run?}
+    DRY -->|Yes| REPORT[Return would-write list]
+    DRY -->|No| SHIM[Write enforcement shim<br/>.claude/helpers/guidance-enforcement.cjs]
+    SHIM --> PKG[Merge package.json<br/>scripts + dependencies]
+    PKG --> MODE{Target mode?}
+    MODE -->|claude/both| SETTINGS[Merge .claude/settings.json<br/>hooks + env vars]
+    MODE -->|codex/both| CODEX[Write .agents/config.toml<br/>+ AGENTS.md bridge docs]
+    SETTINGS --> COMP_JSON[Write components.json<br/>.claude-flow/guidance/]
+    CODEX --> COMP_JSON
+    COMP_JSON --> LOCAL[Ensure CLAUDE.local.md<br/>+ .gitignore entries]
+    LOCAL --> DEPS{Install deps?}
+    DEPS -->|Yes| NPM[npm install]
+    DEPS -->|No| VERIFY{Verify?}
+    NPM --> VERIFY
+    VERIFY -->|Yes| CHECK[Run verify checks<br/>files + syntax + smoke]
+    VERIFY -->|No| DONE([Complete])
+    CHECK --> DONE
+```
+
+## Component System
+
+Components can be toggled via presets or individual selection:
+
+```mermaid
+graph TD
+    subgraph "Presets"
+        MIN[minimal<br/>empty]
+        STD[standard<br/>trust, proof, analysis]
+        FULL[full<br/>all 8 components]
+    end
+
+    subgraph "Components"
+        C1[trust<br/>Per-agent trust scoring]
+        C2[adversarial<br/>Threat + collusion detection]
+        C3[proof<br/>HMAC-SHA256 proof chain]
+        C4[conformance<br/>Memory Clerk acceptance]
+        C5[evolution<br/>Rule change pipeline]
+        C6[autopilot<br/>Auto rule optimisation]
+        C7[analysis<br/>Policy scoring + scaffolding]
+        C8[codex<br/>Codex lifecycle bridge]
+    end
+
+    MIN -.->|none| C1
+    STD --> C1
+    STD --> C3
+    STD --> C7
+    FULL --> C1
+    FULL --> C2
+    FULL --> C3
+    FULL --> C4
+    FULL --> C5
+    FULL --> C6
+    FULL --> C7
+    FULL --> C8
+```
+
+## Runtime Subsystem Graph
+
+The Advanced Runtime instantiates 23+ subsystems. Components.json controls which are real vs null-object:
+
+```mermaid
+graph TB
+    subgraph "Phase 0: Foundation"
+        TS[Trust System]
+        TD[Threat Detector]
+        CD[Collusion Detector]
+        MQ[Memory Quorum]
+        PC[Proof Chain]
+        CR[Conformance Runner]
+        EP2[Evolution Pipeline]
+    end
+
+    subgraph "Phase A: Production Hardening"
+        CS[Coherence Scheduler]
+        EG[Economic Governor]
+        CG2[Continue Gate]
+        IC[Irreversibility Classifier]
+        AG[Authority Gate]
+        MGV[Meta-Governor]
+        OPT2[Optimizer]
+    end
+
+    subgraph "Phase B: Long-Horizon Autonomy"
+        TAS[Truth Anchor Store]
+        TR2[Truth Resolver]
+        UL[Uncertainty Ledger]
+        UA[Uncertainty Aggregator]
+        TST[Temporal Store]
+        TRE[Temporal Reasoner]
+        CA[Capability Algebra]
+    end
+
+    subgraph "Phase C: Polish"
+        AL[Artifact Ledger]
+        MV[Manifest Validator]
+    end
+
+    TAS --> TR2
+    UL --> UA
+    TST --> TRE
+    CS --> CG2
+    OPT2 --> MGV
+    EP2 --> PC
+```
+
+## Data Flow: Autopilot Loop
+
+```mermaid
 flowchart LR
-    accTitle: Policy Compilation Pipeline
-    accDescr: Shows how CLAUDE.md is compiled into enforceable policy gates
-
-    classDef source fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
-    classDef process fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef data fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef enforce fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef output fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
-
-    CMD["CLAUDE.md<br/>(shared rules)"]:::source
-    LOCAL["CLAUDE.local.md<br/>(local experiments)"]:::source
-
-    Compiler["Compiler<br/>Parse Markdown into<br/>typed rule objects"]:::process
-
-    Bundle["Policy Bundle"]:::data
-    Constitution["Constitution<br/>High-level rules<br/>+ content hash"]:::data
-    Shards["Shards<br/>id, text, riskClass<br/>priority, intents<br/>domains, toolClasses"]:::data
-
-    Retriever["Retriever<br/>Semantic shard matching<br/>by task description"]:::process
-
-    Gates["Gates<br/>Rule enforcement<br/>Evaluate conditions"]:::enforce
-
-    Decision["allow / warn / block<br/>+ messages + warnings"]:::output
-
-    Ledger["Ledger<br/>Append-only audit log<br/>taskId, rules, decision, timestamp"]:::output
-
-    CMD --> Compiler
-    LOCAL --> Compiler
-    Compiler --> Bundle
-    Bundle --> Constitution
-    Bundle --> Shards
-    Shards --> Retriever
-    Retriever -->|"matched shards<br/>for current operation"| Gates
-    Gates --> Decision
-    Gates --> Ledger
+    CLM[CLAUDE.md] --> COMP2[Compiler]
+    CLL[CLAUDE.local.md] --> COMP2
+    COMP2 --> RULES[Promotable Rules]
+    RULES --> CANDIDATE[Build Candidate Root]
+    CANDIDATE --> ANALYZE[analyze score]
+    CLM --> BASELINE[Baseline Score]
+    ANALYZE --> DELTA{delta >= threshold?}
+    DELTA -->|No| PROPOSAL[Write proposal file]
+    DELTA -->|Yes| AB{A/B enabled?}
+    AB -->|No| APPLY[Write to CLAUDE.md<br/>+ backup + ADR]
+    AB -->|Yes| BENCHMARK[A/B Benchmark]
+    BENCHMARK --> GAIN{gain >= minGain?}
+    GAIN -->|No| PROPOSAL
+    GAIN -->|Yes| APPLY
 ```
-
-</details>
-
-### Policy sources
-
-- **`CLAUDE.md`** — shared rules checked into the repository. Visible to all contributors. Contains the project's authoritative behavioural policy.
-- **`CLAUDE.local.md`** — local-only experiments (gitignored). Developers test rule changes here before promoting them via the autopilot.
-
-### Shard properties
-
-Each compiled shard carries metadata used for matching and enforcement:
-
-| Property | Example | Purpose |
-|---|---|---|
-| `riskClass` | `high` | Determines gate strictness |
-| `priority` | `90` | Ordering when multiple rules match |
-| `intents` | `#security, #implementation` | Semantic matching to task context |
-| `domains` | `@engineering` | Scope limitation |
-| `toolClasses` | `[bash], [edit]` | Tool-specific rule application |
-
----
-
-## 7. Security Architecture
-
-The Advanced Runtime layers four security capabilities on top of the Phase 1 policy pipeline.
-
-![Security Architecture](diagrams/architecture/security-architecture.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
-flowchart TB
-    accTitle: Security Architecture
-    accDescr: Shows the four security layers of the Advanced Runtime
-
-    classDef core fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef trust fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef adversarial fill:#FCE4EC,stroke:#AD1457,stroke-width:2px,color:#880E4F
-    classDef proof fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
-    classDef quality fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef data fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238
-
-    P1["Phase 1 Runtime<br/>Compiler + Retriever + Gates + Ledger"]:::core
-
-    subgraph TrustLayer["Trust Layer"]
-        direction LR
-        TA["Trust Accumulator<br/>Per-agent score<br/>initial: 0.5<br/>allow: +0.01 / deny: -0.05"]:::trust
-        TL["Trust Ledger<br/>Outcome history<br/>per agent"]:::trust
-        RL["Rate Limiter<br/>trusted: 2x / standard: 1x<br/>probation: 0.5x / untrusted: 0.1x"]:::trust
-        TA --> TL
-        TA --> RL
-    end
-
-    subgraph AdversarialLayer["Adversarial Layer"]
-        direction LR
-        TD["Threat Detector<br/>Prompt injection<br/>Privilege escalation<br/>6 threat categories"]:::adversarial
-        CD["Collusion Detector<br/>Agent interaction rings<br/>Frequency + timing analysis"]:::adversarial
-        MQ["Memory Quorum<br/>2/3 vote threshold<br/>for critical writes"]:::adversarial
-    end
-
-    subgraph ProofLayer["Proof Layer"]
-        PC["Proof Chain<br/>HMAC-SHA256 signed<br/>append-only log<br/>Export / import / verify"]:::proof
-    end
-
-    subgraph QualityLayer["Quality Layer"]
-        direction LR
-        CR["Conformance Runner<br/>Replay determinism<br/>verification"]:::quality
-        EVP["Evolution Pipeline<br/>Propose → simulate → compare<br/>→ stage → promote / rollback"]:::quality
-    end
-
-    subgraph MemoryGateLayer["Memory Gate Layer"]
-        direction LR
-        MGAuth["Authority Check<br/>Role + namespace validation"]:::trust
-        MGRate["Rate Limiter<br/>Per-agent writes/min"]:::trust
-        MGPattern["Pattern Check<br/>always/never, enable/disable<br/>require/forbid oppositions"]:::quality
-        MGSemantic["Semantic Check<br/>Cosine similarity >= 0.85<br/>Contradiction detection"]:::adversarial
-        MGAuth --> MGRate
-        MGRate --> MGPattern
-        MGPattern --> MGSemantic
-    end
-
-    P1 --> MemoryGateLayer
-    MemoryGateLayer --> State
-
-    State[".claude-flow/guidance/advanced/<br/>Trust snapshots, proof chain,<br/>threat history, evolution state"]:::data
-
-    P1 --> TrustLayer
-    P1 --> AdversarialLayer
-    P1 --> ProofLayer
-    P1 --> QualityLayer
-
-    TrustLayer --> State
-    ProofLayer --> State
-    QualityLayer --> State
-```
-
-</details>
-
-### Trust tiers
-
-| Tier | Score Range | Rate Multiplier | Meaning |
-|---|---|---|---|
-| Trusted | >= 0.8 | 2.0x | Consistently follows policy |
-| Standard | >= 0.5 | 1.0x | Normal operation |
-| Probation | >= 0.3 | 0.5x | Recent violations |
-| Untrusted | < 0.3 | 0.1x | Repeated violations, heavily throttled |
-
-### Threat categories
-
-The threat detector analyses inputs against 6 categories: prompt injection, memory poisoning, shard manipulation, malicious delegation, privilege escalation, and data exfiltration. Severe threats (score >= 0.85) trigger an immediate block independent of gate results.
-
-### Proof chain
-
-Every significant operation produces an HMAC-SHA256 signed envelope containing: the event details, tool call records, memory operations, agent ID, detected violations, and the previous envelope's hash. The chain is verifiable end-to-end and exportable for external audit.
-
----
-
-## 8. Installer and Deployment
-
-The installer (`cf-guidance-impl init`) wires hooks into any target repository in three phases.
-
-![Installer Workflow](diagrams/architecture/installer-workflow.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
-flowchart TB
-    accTitle: Installer Workflow
-    accDescr: Shows the three phases of cf-guidance-impl init
-
-    classDef start fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
-    classDef process fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef file fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef decision fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef verify fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
-    classDef error fill:#FFCDD2,stroke:#C62828,stroke-width:2px,color:#B71C1C
-
-    Start["cf-guidance-impl init<br/>--target /path/to/repo"]:::start
-
-    Start --> Phase1
-
-    subgraph Phase1["Phase 1: Claude Flow Init"]
-        CfInit{"--skip-cf-init?"}:::decision
-        CfInit -->|"No"| RunInit["npx @claude-flow/cli init<br/>--dual / --codex"]:::process
-        CfInit -->|"Yes"| Skip1["Skip"]:::process
-    end
-
-    Phase1 --> Phase2
-
-    subgraph Phase2["Phase 2: Guidance Wiring"]
-        Shim["Write hook-handler shim<br/>.claude/helpers/hook-handler.cjs<br/>3-line CJS delegator"]:::file
-        Compat["Ensure .cjs/.js compat pairs<br/>router, session, memory, statusline"]:::file
-        MergeSettings["Merge .claude/settings.json<br/>4 event types + env vars"]:::file
-        CodexConfig["Append .agents/config.toml<br/>+ AGENTS.md documentation"]:::file
-        MergePkg["Merge package.json<br/>20+ guidance:* scripts + dependency"]:::file
-        LocalMd["Create CLAUDE.local.md stub<br/>+ add to .gitignore"]:::file
-    end
-
-    Phase2 --> Phase3
-
-    subgraph Phase3["Phase 3: Verification"]
-        VerifyCheck{"--no-verify?"}:::decision
-        VerifyCheck -->|"No"| Verify["verifyRepo()"]:::verify
-        VerifyCheck -->|"Yes"| Done["Done"]:::start
-        Verify --> FileCheck["Check required files exist"]:::verify
-        Verify --> SyntaxCheck["node --check hook-handler.cjs"]:::verify
-        Verify --> SmokeTest["Smoke test: pipe JSON<br/>to hook-handler"]:::verify
-        Verify --> CompatCheck["Verify .cjs/.js pairs"]:::verify
-        FileCheck --> Result{"All pass?"}:::decision
-        SyntaxCheck --> Result
-        SmokeTest --> Result
-        CompatCheck --> Result
-        Result -->|"Yes"| Done
-        Result -->|"No"| Fail["Error: verification failed"]:::error
-    end
-```
-
-</details>
-
-### What gets installed
-
-| File | Purpose |
-|---|---|
-| `.claude/helpers/hook-handler.cjs` | 3-line shim that `require()`s the full handler from `node_modules` |
-| `.claude/settings.json` (merged) | Hook definitions for PreToolUse, PostToolUse, SessionStart, SessionEnd |
-| `package.json` (merged) | 20+ `guidance:*` npm scripts + implementation dependency |
-| `.agents/config.toml` (Codex mode) | Bridge command mapping |
-| `CLAUDE.local.md` | Stub for local rule experiments |
-
-The thin shim architecture means the hook-handler logic lives in `node_modules` and updates automatically via `npm update` without re-running the installer.
-
----
-
-## 9. Autopilot Optimisation
-
-The autopilot continuously improves `CLAUDE.md` by promoting high-performing rules from `CLAUDE.local.md`.
-
-![Autopilot Optimisation Loop](diagrams/architecture/autopilot-optimisation-loop.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-%%{init: {
-  "theme": "base",
-  "themeVariables": {
-    "primaryColor": "#E3F2FD",
-    "primaryTextColor": "#0D47A1",
-    "primaryBorderColor": "#1565C0",
-    "lineColor": "#37474F"
-  }
-}}%%
-flowchart TB
-    accTitle: Autopilot Optimisation Loop
-    accDescr: Shows how local rules are evaluated, scored, and promoted into CLAUDE.md
-
-    classDef start fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
-    classDef process fill:#E1F5FE,stroke:#0277BD,stroke-width:2px,color:#01579B
-    classDef decision fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
-    classDef data fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
-    classDef apply fill:#E0F2F1,stroke:#00695C,stroke-width:2px,color:#004D40
-    classDef skip fill:#ECEFF1,stroke:#455A64,stroke-width:2px,color:#263238
-
-    Trigger["Trigger<br/>--once / --daemon (30 min)<br/>/ session-end hook"]:::start
-
-    Trigger --> Lock{"Acquire file lock<br/>(PID-based)"}:::decision
-    Lock -->|"Locked"| SkipCycle["Skip cycle"]:::skip
-    Lock -->|"Acquired"| Load
-
-    Load["Load CLAUDE.md<br/>+ CLAUDE.local.md"]:::process
-    Load --> Find["Find promotable local rules<br/>New or changed vs root"]:::process
-
-    Find --> HasRules{"Candidates<br/>found?"}:::decision
-    HasRules -->|"None"| NoOp["No promotable rules"]:::skip
-    HasRules -->|"Yes"| Build
-
-    Build["Build candidate CLAUDE.md<br/>Insert auto-promotion section"]:::process
-    Build --> Score["Score both versions<br/>analyze() + benchmark()"]:::process
-
-    Score --> ABCheck{"--ab flag?"}:::decision
-    ABCheck -->|"Yes"| AB["A/B Benchmark<br/>Synthetic executor<br/>baseline vs guided"]:::process
-    ABCheck -->|"No"| Gate
-
-    AB --> ABGate{"deltaGain >=<br/>--min-ab-gain?"}:::decision
-    ABGate -->|"No"| Propose
-    ABGate -->|"Yes"| Gate
-
-    Gate{"delta >= --min-delta<br/>AND --apply?"}:::decision
-    Gate -->|"No"| Propose["Save proposal<br/>proposals/CLAUDE.promoted.*.md"]:::data
-    Gate -->|"Yes"| Apply["Apply promotion"]:::apply
-
-    Apply --> Backup["Backup CLAUDE.md"]:::data
-    Apply --> Write["Write updated CLAUDE.md"]:::data
-    Apply --> ADR["Generate ADR<br/>docs/adr/ADR-NNN-*.md"]:::data
-
-    Propose --> Report["Write report + state + log"]:::data
-    Apply --> Report
-
-    Report --> Release["Release lock"]:::process
-    NoOp --> Release
-    SkipCycle --> Done["Done"]:::start
-    Release --> Daemon{"--daemon?"}:::decision
-    Daemon -->|"Yes"| Wait["Wait 30 min"]:::process
-    Wait --> Trigger
-    Daemon -->|"No"| Done
-```
-
-</details>
-
-### Autopilot triggers
-
-| Trigger | Mode | Description |
-|---|---|---|
-| `session-end` hook | Automatic | Spawned as detached background process at end of every Claude Code session |
-| `--once` | Manual | Single optimisation cycle via `npm run guidance:autopilot:once` |
-| `--daemon` | Continuous | Repeating cycle every 30 minutes via `npm run guidance:autopilot:daemon` |
-
-### Environment controls
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `GUIDANCE_AUTOPILOT_ENABLED` | `1` | Disable with `0` to suppress session-end autopilot |
-| `GUIDANCE_AUTOPILOT_MIN_DELTA` | `0.5` | Minimum score improvement for promotion |
-| `GUIDANCE_AUTOPILOT_AB` | `0` | Enable A/B gate with `1` |
-| `GUIDANCE_AUTOPILOT_MIN_AB_GAIN` | `0.05` | Minimum A/B delta gain |
-
----
-
-## 10. Key Design Decisions
-
-### ADR-001: CommonJS for the hook handler
-
-**Context**: Claude Code executes hooks by running `node <path>`. The handler is in the critical path of every tool use.
-
-**Decision**: Use CommonJS (`.cjs`) with lazy `require()` loading, not ESM.
-
-**Rationale**: CJS avoids ESM resolution overhead and supports synchronous `require()` calls that only load modules when actually needed. Helper modules (router, session, intelligence) are loaded on first use, not at startup.
-
-### ADR-002: Synchronous guidance calls for blocking hooks
-
-**Context**: Pre-bash, pre-edit, and pre-task handlers must return a decision before the agent proceeds.
-
-**Decision**: Use `spawnSync` to invoke the guidance runtime as a child process.
-
-**Rationale**: Claude Code expects the hook process to exit before continuing. The exit code determines allow/block. Timeout and fail-open/fail-closed behaviour are configurable.
-
-### ADR-003: Detached async processes for post-hooks
-
-**Context**: Post-edit, post-task, and session-end perform governance work (trust recording, proof chain, intelligence consolidation) that should not delay the agent.
-
-**Decision**: Use `spawn` with `detached: true` and `child.unref()`.
-
-**Rationale**: The handler process exits immediately. The background process runs independently, persisting state without blocking agent execution.
-
-### ADR-004: Thin shim architecture
-
-**Context**: The installer writes a hook-handler file into the target repository.
-
-**Decision**: Write a 3-line CJS shim that `require()`s the full handler from `node_modules`, rather than copying the full handler source.
-
-**Rationale**: Updates to handler logic are picked up automatically via `npm update`. No need to re-run the installer after package updates.
-
-### ADR-005: Dual module system support
-
-**Context**: The hook handler must be CJS (for startup speed); CLI tools and runtime use ESM (for modern syntax and tree-shaking).
-
-**Decision**: Maintain both `.mjs` (ESM) and `.cjs` (CJS) variants of shared utilities. The installer creates `.js`/`.cjs` compatibility pairs for all helper modules.
-
-**Rationale**: Both module systems are required and cannot be avoided. The compatibility pair mechanism ensures `require()` and `import` both resolve to the same logic.
-
-### ADR-006: Fail-open by default
-
-**Context**: If the guidance runtime times out or crashes during a blocking hook, the agent is stuck.
-
-**Decision**: Default to fail-open (`GUIDANCE_EVENT_FAIL_CLOSED=0`). The agent proceeds if guidance is unavailable.
-
-**Rationale**: An unresponsive guidance system should degrade gracefully rather than halt all agent operations. Operators can set `GUIDANCE_EVENT_FAIL_CLOSED=1` for high-security environments.
-
----
-
-## 11. Module Map
-
-| Layer | File | Role |
-|---|---|---|
-| **Entry** | `bin/cf-guidance-impl.mjs` | CLI entry point for installer |
-| **Installer** | `src/installer.mjs` | `initRepo()`, `installIntoRepo()`, `verifyRepo()` |
-| **Config** | `src/default-settings.mjs` | Hook definitions, env vars, npm scripts, dependency declarations |
-| **Dispatcher** | `src/hook-handler.cjs` | CJS hook handler: 12 commands, stdin JSON parsing, dispatch |
-| **Utilities** | `src/utils.mjs` / `src/utils.cjs` | Shared helpers (ESM + CJS variants) |
-| **Runtime** | `src/guidance/phase1-runtime.js` | Compiler + Retriever + Gates + Ledger + Hook Registry |
-| **Runtime** | `src/guidance/advanced-runtime.js` | Trust + Adversarial + Proof + Conformance + Evolution |
-| **Runtime** | `src/guidance/integration-runners.js` | 6 integration test suites |
-| **Runtime** | `src/guidance/content-aware-executor.js` | Synthetic executor for A/B benchmarking |
-| **Runtime** | `src/guidance/embedding-provider.js` | EmbeddingProvider interface + hash and AgentDB implementations |
-| **Runtime** | `src/guidance/memory-write-gate.js` | MemoryWriteGateHook: 4-check pre-write gate (authority, rate, pattern, semantic) |
-| **CLI** | `src/cli/guidance-integrations.js` | Event dispatch + integration suite orchestration |
-| **CLI** | `src/cli/event-handlers.js` | Per-event policy enforcement logic |
-| **CLI** | `src/cli/guidance-autopilot.js` | Rule optimisation and promotion |
-| **CLI** | `src/cli/guidance-ab-benchmark.js` | A/B benchmark runner |
-| **CLI** | `src/cli/analyze-guidance.js` | Policy bundle scoring (6 dimensions) |
-| **CLI** | `src/cli/guidance-runtime.js` | Runtime demo and interactive testing |
-| **CLI** | `src/cli/guidance-codex-bridge.js` | Codex lifecycle adapter (8 events) |
-| **CLI** | `src/cli/scaffold-guidance.js` | Project scaffolding generator |
-
-### External dependencies
-
-| Package | Purpose |
-|---|---|
-| `@claude-flow/guidance` | Policy engine: compiler, retriever, gates, ledger, trust, adversarial, proof, conformance, evolution, analyzer |
-| `@claude-flow/hooks` | Hook registry and executor framework |

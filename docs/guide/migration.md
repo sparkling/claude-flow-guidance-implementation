@@ -169,8 +169,8 @@ example, a `PreToolUse` block matching `Bash`), the installer adds the
 guidance hook alongside the existing one. Both hooks run during execution.
 
 If both an existing hook and a guidance hook attempt to block the same tool
-call, the first hook to exit with code 1 wins. Claude Code respects the first
-non-zero exit code and aborts the tool call.
+call, a blocking hook must exit with code 2. Exit code 1 is non-blocking by
+default, so it cannot be relied on to prevent the tool call.
 
 ## Scenario 3: Codex repository without Claude Code
 
@@ -386,7 +386,8 @@ The shim at `.claude/helpers/hook-handler.cjs` requires the
 ### Existing pre-bash hooks conflict with guidance hooks
 
 When both an existing hook and a guidance hook match the same tool call, both
-execute. If both attempt to block, the first `exit(1)` wins.
+execute. If either must block a supported action, its handler must use `exit(2)`;
+`exit(1)` is a non-blocking error by default.
 
 **Fix:** Review the hooks in `.claude/settings.json` to confirm they are
 compatible. If an existing hook already handles the same policy concern as a

@@ -228,9 +228,9 @@ hooks are:
 
 | Claude Code Event | Hook Handler Command | Behaviour |
 |---|---|---|
-| `PreToolUse` (Write, Edit, MultiEdit) | `hook-handler.cjs pre-edit` | **Blocking.** Evaluates file path, diff size, and content against gates. Returns exit code 1 to block. |
-| `PreToolUse` (Bash) | `hook-handler.cjs pre-bash` | **Blocking.** Evaluates shell commands against destructive-ops gate and threat detector. Returns exit code 1 to block. |
-| `PreToolUse` (Task) | `hook-handler.cjs pre-task` | **Blocking.** Retrieves task-relevant policy shards and evaluates task description. Returns exit code 1 to block. |
+| `PreToolUse` (Write, Edit, MultiEdit) | `hook-handler.cjs pre-edit` | **Blocking.** Evaluates file path, diff size, and content against gates. Returns exit code 2 to block. |
+| `PreToolUse` (Bash) | `hook-handler.cjs pre-bash` | **Blocking.** Evaluates shell commands against destructive-ops gate and threat detector. Returns exit code 2 to block. |
+| `PreToolUse` (Task) | `hook-handler.cjs pre-task` | **Blocking.** Retrieves task-relevant policy shards and evaluates task description. Returns exit code 2 to block. |
 | `PostToolUse` (Write, Edit, MultiEdit) | `hook-handler.cjs post-edit` | **Async.** Records the edit in the proof chain and intelligence system. Non-blocking. |
 | `PostToolUse` (Task) | `hook-handler.cjs post-task` | **Async.** Records task completion and triggers learning. Non-blocking. |
 | `SessionStart` | `hook-handler.cjs session-restore` | **Async.** Restores session state and loads intelligence patterns. |
@@ -320,9 +320,10 @@ shape `{ tool_input: { command, file_path, ... }, tool_name, ... }`.
 The hook handler parses this to extract the command text, file path,
 task description, and other parameters.
 
-**Exit codes:** Exit 0 means the action is allowed. Exit 1 means the
-action is blocked. Async hooks always exit 0 because they do not gate
-the action.
+**Exit codes:** Exit 0 means the hook succeeded; without an explicit hook
+permission decision, Claude Code still applies its normal permission checks.
+Exit 2 blocks a supported action and supplies stderr as the reason. Exit 1
+is a non-blocking hook error by default. Async hooks do not gate the action.
 
 ### 6.3 Phase 1 Runtime (`src/guidance/phase1-runtime.js`)
 
@@ -639,7 +640,7 @@ Claude Code
   |  |  |  +- Returns { blocked: true/false }
   |  |  |
   |  |  +- Checks local dangerous-pattern regex list
-  |  |  +- If blocked -> stderr "[BLOCKED]", exit(1)
+  |  |  +- If blocked -> stderr "[BLOCKED]", exit(2)
   |  |
   |  +- exit(0) if allowed
   |
@@ -650,8 +651,9 @@ Claude Code
 
 **Blocking hooks** (`pre-bash`, `pre-edit`, `pre-task`) use `spawnSync`
 to call the guidance event handler. The hook handler waits for the
-result and returns exit code 1 to block or 0 to allow. Claude Code
-honours the exit code and aborts the tool use if it is non-zero.
+result and returns exit code 2 to block or 0 for a successful hook. Claude Code
+blocks the tool call on exit 2; exit 1 is non-blocking by default.
+Exit 0 without an explicit permission decision retains normal permission checks.
 
 **Async hooks** (`post-edit`, `post-task`, `session-end`) use `spawn`
 with `detached: true` and `stdio: 'ignore'`. The child process runs in

@@ -222,7 +222,7 @@ const handlers = {
     const guidance = runGuidanceEventSync('pre-command', buildGuidancePayload({ taskId: getTaskId('pre-command'), command: commandText }));
     if (guidance && guidance.blocked) {
       console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Command blocked by guidance'));
-      process.exit(1);
+      process.exit(2);
     }
     const dangerousPatterns = [
       /rm\s+-rf\s+\//,
@@ -233,7 +233,7 @@ const handlers = {
     for (const pattern of dangerousPatterns) {
       if (pattern.test(commandText)) {
         console.error('[BLOCKED] Dangerous command pattern detected');
-        process.exit(1);
+        process.exit(2);
       }
     }
     console.log('[OK] Command validated');
@@ -248,7 +248,7 @@ const handlers = {
     }));
     if (guidance && guidance.blocked) {
       console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Edit blocked by guidance'));
-      process.exit(1);
+      process.exit(2);
     }
     console.log('[OK] Edit validated');
   },
@@ -260,7 +260,7 @@ const handlers = {
     const guidance = runGuidanceEventSync('pre-task', buildGuidancePayload({ taskId, taskDescription }));
     if (guidance && guidance.blocked) {
       console.error('[BLOCKED] ' + guidanceBlockMessage(guidance, 'Task blocked by guidance'));
-      process.exit(1);
+      process.exit(2);
     }
     console.log('[OK] Task started');
   },
